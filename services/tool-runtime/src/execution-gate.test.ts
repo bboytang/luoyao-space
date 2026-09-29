@@ -42,6 +42,21 @@ const baseContext = {
   },
 };
 
+describe("capability identity binding", () => {
+  it("rejects an invocation for a different capability", () => {
+    expect(
+      checkExecutionGate(
+        capability,
+        { ...baseInvocation, capabilityId: "filesystem.read" },
+        baseContext,
+      ),
+    ).toEqual({
+      allowed: false,
+      reason: "capability_identity_mismatch",
+    });
+  });
+});
+
 describe("tool execution gate", () => {
   it("allows a fully authorized invocation", () => {
     expect(checkExecutionGate(capability, baseInvocation, baseContext)).toEqual({
