@@ -1,5 +1,6 @@
 import { rankMemories, type RankedMemory } from "./ranking";
 import type { MemoryRepository } from "./repository";
+import type { EmbeddingProvider } from "./embedding";
 
 export interface MemoryService {
   remember(input: Parameters<MemoryRepository["create"]>[0]): Promise<ReturnType<MemoryRepository["create"]> extends Promise<infer T> ? T : never>;
@@ -14,14 +15,14 @@ export interface MemoryService {
   }): Promise<RankedMemory[]>;
 }
 
-export function createMemoryService(repository: MemoryRepository): MemoryService {
+export function createMemoryService(repository: MemoryRepository, embedding?: EmbeddingProvider): MemoryService {
   return {
     remember(input) {
       return repository.create(input);
     },
 
     async recall(input) {
-      const candidates = await repository.findCandidates({
+      const queryEmbedding = embedding\n        ? (await embedding.embed({ text: input.query })).vector\n        : undefined;\n\n      const candidates = await repository.findCandidates({
         userId: input.userId,
         companionId: input.companionId,
         query: input.query,
