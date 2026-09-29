@@ -24,7 +24,7 @@
 - streaming TTS
 - barge-in
 - avatar emotion events
-- XiaoZhi runtime adapter
+- external runtime compatibility adapter
 
 ## Phase 3 — Agent OS
 - durable tasks
