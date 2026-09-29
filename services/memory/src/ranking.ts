@@ -41,6 +41,9 @@ function clamp(value: number): number {
 }
 
 function recencyScore(createdAt: string, now: string): number {
+  if (!Number.isFinite(new Date(createdAt).getTime()) || !Number.isFinite(new Date(now).getTime())) {
+    return 0;
+  }
   const ageMs = Math.max(0, new Date(now).getTime() - new Date(createdAt).getTime());
   const ageDays = ageMs / 86_400_000;
   return Math.exp(-ageDays / 30);
