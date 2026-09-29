@@ -1,5 +1,6 @@
 import type { ModelRouter } from "./model-router";
 import type { MemoryService } from "../memory/src/service";
+import type { MemoryWriteSignals } from "../memory/src/write-policy";
 import {
   directConversation,
   type BehaviorPolicy,
@@ -62,6 +63,7 @@ export interface ConversationRequest {
   companionId: string;
   sessionId?: string;
   userMessage: string;
+  memoryWriteSignals?: Omit<MemoryWriteSignals, "userMessage">;
   signals: Omit<ConversationSignals, "relationshipStage" | "userInitiative"> & {
     recentQuestionCount: number;
     recentAdviceCount: number;
@@ -77,7 +79,7 @@ export interface ConversationResponse {
 }
 
 export interface ConversationServiceDependencies {
-  memory: Pick<MemoryService, "recall">;
+  memory: Pick<MemoryService, "recall" | "rememberCandidate">;
   relationship: ConversationRelationshipStore;
   model: ConversationModel;
   events?: ConversationEventSink;
@@ -121,6 +123,15 @@ export async function respondToConversation(
     memories,
     relationship,
   });
+
+  if (request.memoryWriteSignals) {
+    await dependencies.memory.rememberCandidate({
+      userId: request.userId,
+      companionId: request.companionId,
+      userMessage: request.userMessage,
+      ...request.memoryWriteSignals,
+    });
+  }
 
   if (dependencies.events) {
     await dependencies.events.emit({
