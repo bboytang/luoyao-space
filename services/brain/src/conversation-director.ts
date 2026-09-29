@@ -50,11 +50,19 @@ export function directConversation(signals: ConversationSignals): BehaviorPolicy
     Math.min(0.55, 0.22 + signals.userInitiative * 0.18 - signals.recentQuestionCount * 0.08),
   );
 
-  const adviceProbability = explicitTask
+  const baseAdviceProbability = explicitTask
     ? 0.65
     : tired
       ? 0.18
       : 0.04;
+  const adviceProbability = Math.max(
+    0,
+    Math.min(0.75, baseAdviceProbability - signals.recentAdviceCount * 0.06),
+  );
+  const emotionIntensity = Math.max(
+    0.1,
+    Math.min(0.9, 0.3 + signals.emotionalIntensity * 0.5 + (tired || playful ? 0.1 : 0)),
+  );
 
   return {
     responseLength: explicitTask ? "normal" : short ? "very_short" : "short",
@@ -67,6 +75,6 @@ export function directConversation(signals: ConversationSignals): BehaviorPolicy
     adviceProbability,
     teasingProbability: playful ? 0.55 : 0.06,
     emotion: playful ? "playful" : tired ? "warm" : "calm",
-    emotionIntensity: tired || playful ? 0.55 : 0.3,
+    emotionIntensity,
   };
 }
