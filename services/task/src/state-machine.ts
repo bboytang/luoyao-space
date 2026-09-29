@@ -13,6 +13,10 @@ const transitions: Record<TaskStatus, TaskStatus[]> = {
 };
 
 export function canTransition(from: TaskStatus, to: TaskStatus): boolean {
+  if (from === "WAITING_APPROVAL" && to === "RUNNING") {
+    return false;
+  }
+
   return transitions[from].includes(to);
 }
 
