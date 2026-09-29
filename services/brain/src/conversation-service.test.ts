@@ -20,7 +20,18 @@ describe("conversation service", () => {
     const memory = {
       recall: vi.fn(async () => {
         order.push("memory");
-        return [{ id: "m1", content: "shared history", relevance: 0.9 }];
+        return [{
+          id: "m1",
+          userId: "user-1",
+          companionId: "companion-1",
+          kind: "shared_history" as const,
+          content: "shared history",
+          importance: 0.8,
+          relationshipRelevance: 0.8,
+          projectRelevance: 0,
+          createdAt: "2026-09-29T00:00:00Z",
+          score: 0.9,
+        }];
       }),
     };
     const relationship = {
