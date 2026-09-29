@@ -58,6 +58,38 @@ describe("conversation service", () => {
     expect(order).toEqual(["relationship", "memory", "model"]);
   });
 
+  it("emits a memory write request without coupling to the memory writer", async () => {
+    const memory = { recall: vi.fn(async () => []) };
+    const relationship = {
+      get: vi.fn(async () => ({ stage: "close" as const, userInitiative: 0.5 })),
+    };
+    const model = { generate: vi.fn(async () => "记下啦。") };
+    const emitted: Array<{ type: string; data: Record<string, unknown> }> = [];
+
+    await respondToConversation(
+      {
+        ...baseRequest,
+        memoryWriteSignals: { containsStablePreference: true },
+      },
+      {
+        memory,
+        relationship,
+        model,
+        events: {
+          async emit(event) {
+            emitted.push({ type: event.type, data: event.data });
+          },
+        },
+      },
+    );
+
+    expect(emitted[0]?.type).toBe("memory.write.requested");
+    expect(emitted[0]?.data).toMatchObject({
+      userMessage: "今天还行",
+      signals: { containsStablePreference: true },
+    });
+  });
+
   it("uses recent memory when requested by the director", async () => {
     const memory = { recall: vi.fn(async () => []) };
     const relationship = {
