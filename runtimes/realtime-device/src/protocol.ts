@@ -108,7 +108,16 @@ export function isControlMessage(value: unknown): value is RealtimeControlMessag
 
   switch (message.type) {
     case "hello":
-      return message.version === 1 && typeof message.sessionId === "string";
+      return (
+        message.version === 1 &&
+        typeof message.sessionId === "string" &&
+        message.sessionId.trim().length > 0 &&
+        (message.deviceId === undefined ||
+          (typeof message.deviceId === "string" && message.deviceId.trim().length > 0)) &&
+        (message.capabilities === undefined ||
+          (Array.isArray(message.capabilities) &&
+            message.capabilities.every((capability) => typeof capability === "string")))
+      );
     case "listen":
       return message.mode === "start" || message.mode === "stop";
     case "abort":
