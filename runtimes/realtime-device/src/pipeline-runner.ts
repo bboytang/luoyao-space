@@ -107,6 +107,10 @@ export async function* runAudioPipeline(
       error: error instanceof Error ? error : new Error(String(error)),
     };
   } finally {
-    await feeder;
+    if (context.signal.aborted) {
+      frames.end();
+    } else {
+      await feeder;
+    }
   }
 }
