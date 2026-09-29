@@ -107,6 +107,7 @@ describe("WebSocketTransport", () => {
     };
     socket.receiveMessage(JSON.stringify(hello));
     socket.receiveMessage(new Uint8Array([9, 10]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(onMessage).toHaveBeenCalledWith(hello);
     expect(onAudio).toHaveBeenCalledWith(
@@ -144,7 +145,7 @@ describe("WebSocketTransport", () => {
       }),
     );
 
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(socket.close).toHaveBeenCalledWith(1011, "message handler failed");
   });
