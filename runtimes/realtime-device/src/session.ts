@@ -11,6 +11,7 @@ export type SessionTransition =
   | { type: "speech_start" }
   | { type: "speech_stop" }
   | { type: "abort" }
+  | { type: "abort_complete" }
   | { type: "close" }
   | { type: "closed" };
 
@@ -42,8 +43,7 @@ const transitions: Record<
     close: "closing",
   },
   aborting: {
-    closed: "closed",
-    listen_start: "listening",
+    abort_complete: "ready",
     close: "closing",
   },
   closing: {
