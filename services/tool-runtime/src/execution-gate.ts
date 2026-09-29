@@ -26,6 +26,10 @@ export function checkExecutionGate(
   invocation: CapabilityInvocation,
   context: ExecutionGateContext,
 ): ExecutionGateDecision {
+  if (invocation.capabilityId !== capability.id) {
+    return { allowed: false, reason: "capability_identity_mismatch" };
+  }
+
   if (invocation.userId !== context.device.userId) {
     return { allowed: false, reason: "user_identity_mismatch" };
   }
