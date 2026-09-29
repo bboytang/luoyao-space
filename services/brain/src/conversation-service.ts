@@ -50,7 +50,7 @@ export interface ConversationRelationshipStore {
 
 export interface ConversationEventSink {
   emit(event: {
-    type: "conversation.created" | "conversation.updated" | "emotion.changed";
+    type: "conversation.created" | "conversation.updated" | "emotion.changed" | "memory.write.requested";
     userId: string;
     companionId: string;
     sessionId?: string;
