@@ -142,3 +142,7 @@ runtimes/
 ```
 
 The runtime can eventually be replaced or supplemented without changing Brain or Agent OS.
+
+## 8. Source attribution
+
+Third-party-derived runtime work is tracked separately from original Luoyao Space code. See [`source-attribution.md`](./source-attribution.md) for the provenance rules and current map. Actual adapted files must carry a source-attribution header; independently rewritten files use a design-reference header.
