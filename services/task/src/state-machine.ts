@@ -17,6 +17,10 @@ export function canTransition(from: TaskStatus, to: TaskStatus): boolean {
 }
 
 export function transition(from: TaskStatus, to: TaskStatus): TaskStatus {
+  if (from === "WAITING_APPROVAL" && to === "RUNNING") {
+    throw new Error("Approval transition requires transitionAfterApproval");
+  }
+
   if (!canTransition(from, to)) {
     throw new Error(`Invalid task transition: ${from} -> ${to}`);
   }
