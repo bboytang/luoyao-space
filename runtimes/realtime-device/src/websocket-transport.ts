@@ -38,17 +38,25 @@ export class WebSocketTransport implements RealtimeTransport {
     private readonly codec: TransportCodec,
   ) {
     socket.addEventListener("message", (event) => {
-      if (typeof event.data === "string") {
-        const message = this.codec.decodeControl(event.data);
-        for (const handler of this.messageHandlers) {
-          void handler(message);
+      try {
+        if (typeof event.data === "string") {
+          const message = this.codec.decodeControl(event.data);
+          for (const handler of this.messageHandlers) {
+            void Promise.resolve()
+              .then(() => handler(message))
+              .catch(() => this.protocolClose(1011, "message handler failed"));
+          }
+          return;
         }
-        return;
-      }
 
-      const frame = this.codec.decodeAudio(event.data);
-      for (const handler of this.audioHandlers) {
-        void handler(frame);
+        const frame = this.codec.decodeAudio(event.data);
+        for (const handler of this.audioHandlers) {
+          void Promise.resolve()
+            .then(() => handler(frame))
+            .catch(() => this.protocolClose(1011, "audio handler failed"));
+        }
+      } catch {
+        this.protocolClose(1002, "protocol error");
       }
     });
 
@@ -62,6 +70,14 @@ export class WebSocketTransport implements RealtimeTransport {
         handler(closeEvent);
       }
     });
+  }
+
+  private protocolClose(code: number, reason: string): void {
+    try {
+      this.socket.close(code, reason);
+    } catch {
+      // The socket may already be closing or closed.
+    }
   }
 
   async send(message: RealtimeServerMessage): Promise<void> {
