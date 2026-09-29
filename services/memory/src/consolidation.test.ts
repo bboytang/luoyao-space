@@ -11,7 +11,7 @@ const existing = {
   relationshipRelevance: 0,
   projectRelevance: 0,
   createdAt: "2026-09-29T00:00:00.000Z",
-  embeddingScore: 0.96,
+  embeddingScore: 0.2,
 };
 
 describe("memory consolidation", () => {
