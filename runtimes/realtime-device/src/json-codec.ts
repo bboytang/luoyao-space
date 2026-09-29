@@ -28,7 +28,16 @@ export const jsonCodec: TransportCodec = {
     }
 
     if (message.type === "hello") {
-      if (message.version !== 1 || typeof message.sessionId !== "string") {
+      if (
+        message.version !== 1 ||
+        typeof message.sessionId !== "string" ||
+        message.sessionId.trim().length === 0 ||
+        (message.deviceId !== undefined &&
+          (typeof message.deviceId !== "string" || message.deviceId.trim().length === 0)) ||
+        (message.capabilities !== undefined &&
+          (!Array.isArray(message.capabilities) ||
+            message.capabilities.some((capability) => typeof capability !== "string"))) 
+      ) {
         throw new TransportProtocolError("Invalid hello message");
       }
     }
