@@ -119,6 +119,8 @@ export async function* runAudioPipeline(
   } finally {
     if (context.signal.aborted) {
       frames.end();
+    } else {
+      await feeder;
     }
   }
 }
