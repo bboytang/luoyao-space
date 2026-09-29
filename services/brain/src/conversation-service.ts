@@ -1,6 +1,6 @@
 import type { ModelRouter } from "./model-router";
-import type { MemoryService } from "../memory/src/service";
-import type { MemoryWriteSignals } from "../memory/src/write-policy";
+import type { MemoryService } from "../../memory/src/service";
+import type { MemoryWriteSignals } from "../../memory/src/write-policy";
 import {
   directConversation,
   type BehaviorPolicy,
