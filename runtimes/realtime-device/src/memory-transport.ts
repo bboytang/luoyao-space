@@ -1,0 +1,94 @@
+import type {
+  AudioFrame,
+  RealtimeControlMessage,
+  RealtimeServerMessage,
+} from "./protocol";
+import type {
+  RealtimeTransport,
+  TransportCloseEvent,
+} from "./transport";
+
+type MessageHandler = (
+  message: RealtimeControlMessage,
+) => void | Promise<void>;
+
+type AudioHandler = (frame: AudioFrame) => void | Promise<void>;
+
+type CloseHandler = (event: TransportCloseEvent) => void;
+
+export class MemoryRealtimeTransport implements RealtimeTransport {
+  readonly sentMessages: RealtimeServerMessage[] = [];
+  readonly sentAudio: AudioFrame[] = [];
+
+  private readonly messageHandlers = new Set<MessageHandler>();
+  private readonly audioHandlers = new Set<AudioHandler>();
+  private readonly closeHandlers = new Set<CloseHandler>();
+  private closed = false;
+
+  async send(message: RealtimeServerMessage): Promise<void> {
+    this.assertOpen();
+    this.sentMessages.push(message);
+  }
+
+  async sendAudio(frame: AudioFrame): Promise<void> {
+    this.assertOpen();
+    this.sentAudio.push(frame);
+  }
+
+  async close(code = 1000, reason = ""): Promise<void> {
+    if (this.closed) return;
+
+    this.closed = true;
+
+    const event: TransportCloseEvent = {
+      code,
+      reason,
+      wasClean: code === 1000,
+    };
+
+    for (const handler of this.closeHandlers) {
+      handler(event);
+    }
+  }
+
+  onMessage(handler: MessageHandler): () => void {
+    this.messageHandlers.add(handler);
+    return () => this.messageHandlers.delete(handler);
+  }
+
+  onAudio(handler: AudioHandler): () => void {
+    this.audioHandlers.add(handler);
+    return () => this.audioHandlers.delete(handler);
+  }
+
+  onClose(handler: CloseHandler): () => void {
+    this.closeHandlers.add(handler);
+    return () => this.closeHandlers.delete(handler);
+  }
+
+  async receiveMessage(message: RealtimeControlMessage): Promise<void> {
+    this.assertOpen();
+
+    for (const handler of this.messageHandlers) {
+      await handler(message);
+    }
+  }
+
+  async receiveAudio(frame: AudioFrame): Promise<void> {
+    this.assertOpen();
+
+    for (const handler of this.audioHandlers) {
+      await handler(frame);
+    }
+  }
+
+  get isClosed(): boolean {
+    return this.closed;
+  }
+
+  private assertOpen(): void {
+    if (this.closed) {
+      throw new Error("Realtime transport is closed");
+    }
+  }
+}
