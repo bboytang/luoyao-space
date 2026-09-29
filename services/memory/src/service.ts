@@ -203,10 +203,12 @@ export function createMemoryService(
         projectWeight: input.projectWeight ?? 1,
       }).slice(0, input.limit);
 
-      await repository.markAccessed(
-        ranked.map((memory) => memory.id),
-        input.now,
-      );
+      if (ranked.length > 0) {
+        await repository.markAccessed(
+          ranked.map((memory) => memory.id),
+          input.now,
+        );
+      }
 
       return ranked;
     },
