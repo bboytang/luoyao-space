@@ -4,7 +4,7 @@ import { PostgresMemoryRepository, type SqlClient } from "./postgres-repository"
 type QueryCall = [string, readonly unknown[] | undefined];
 
 function makeClient(query: ReturnType<typeof vi.fn>): SqlClient {
-  return query as unknown as SqlClient;
+  return { query } as unknown as SqlClient;
 }
 
 describe("PostgresMemoryRepository", () => {
