@@ -24,14 +24,14 @@ describe("memory write policy", () => {
     expect(decideMemoryWrite({
       userMessage: "我一直喜欢短一点的回复",
       containsStablePreference: true,
-    }).kind).toBe("store");
+    }).action).toBe("store");
   });
 
   it("stores high-significance emotional context", () => {
     expect(decideMemoryWrite({
       userMessage: "这件事对我真的很重要",
       emotionalSignificance: 0.9,
-    }).kind).toBe("store");
+    }).action).toBe("store");
   });
 
   it("does not turn ordinary conversation into permanent memory", () => {
