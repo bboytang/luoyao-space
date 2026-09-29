@@ -114,6 +114,41 @@ describe("WebSocketTransport", () => {
     );
   });
 
+
+  it("closes with a protocol error when inbound decoding fails", () => {
+    const socket = new FakeSocket();
+    const failingCodec: TransportCodec = {
+      ...codec,
+      decodeControl: () => {
+        throw new Error("malformed");
+      },
+    };
+    new WebSocketTransport(socket, failingCodec);
+
+    socket.receiveMessage("not-json");
+
+    expect(socket.close).toHaveBeenCalledWith(1002, "protocol error");
+  });
+
+  it("contains inbound handler failures", async () => {
+    const socket = new FakeSocket();
+    const transport = new WebSocketTransport(socket, codec);
+    transport.onMessage(() => {
+      throw new Error("handler failed");
+    });
+
+    socket.receiveMessage(
+      JSON.stringify({
+        type: "ping",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    await Promise.resolve();
+
+    expect(socket.close).toHaveBeenCalledWith(1011, "message handler failed");
+  });
+
   it("maps close events and supports unsubscribe", () => {
     const socket = new FakeSocket();
     const transport = new WebSocketTransport(socket, codec);
