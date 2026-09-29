@@ -103,11 +103,24 @@ export interface AudioFrame {
 
 export function isControlMessage(value: unknown): value is RealtimeControlMessage {
   if (!value || typeof value !== "object") return false;
+
   const message = value as Record<string, unknown>;
-  return (
-    message.type === "hello" ||
-    message.type === "listen" ||
-    message.type === "abort" ||
-    message.type === "ping"
-  );
+
+  switch (message.type) {
+    case "hello":
+      return message.version === 1 && typeof message.sessionId === "string";
+    case "listen":
+      return message.mode === "start" || message.mode === "stop";
+    case "abort":
+      return (
+        message.reason === "barge_in" ||
+        message.reason === "user_cancel" ||
+        message.reason === "session_shutdown" ||
+        message.reason === "system"
+      );
+    case "ping":
+      return typeof message.timestamp === "string";
+    default:
+      return false;
+  }
 }
