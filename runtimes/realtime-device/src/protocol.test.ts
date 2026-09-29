@@ -22,6 +22,10 @@ describe("realtime control messages", () => {
 
   it("rejects incomplete or unsupported control messages", () => {
     expect(isControlMessage({ type: "hello" })).toBe(false);
+    expect(isControlMessage({ type: "hello", version: 1, sessionId: "" })).toBe(false);
+    expect(
+      isControlMessage({ type: "hello", version: 1, sessionId: "s", capabilities: [1] }),
+    ).toBe(false);
     expect(isControlMessage({ type: "listen" })).toBe(false);
     expect(isControlMessage({ type: "abort", reason: "unknown" })).toBe(false);
     expect(isControlMessage({ type: "ping" })).toBe(false);
