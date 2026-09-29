@@ -16,6 +16,7 @@ export interface MemoryCandidateQuery {
   userId: string;
   companionId: string;
   query: string;
+  queryEmbedding?: readonly number[];
   limit: number;
   now: string;
   relationshipWeight: number;
