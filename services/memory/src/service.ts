@@ -1,6 +1,6 @@
 import { rankMemories, type RankedMemory } from "./ranking";
 import type { MemoryRepository } from "./repository";
-import type { EmbeddingProvider } from "./embedding";
+import { validateEmbedding, type EmbeddingProvider } from "./embedding";
 
 export interface MemoryService {
   remember(input: Parameters<MemoryRepository["create"]>[0]): Promise<ReturnType<MemoryRepository["create"]> extends Promise<infer T> ? T : never>;
