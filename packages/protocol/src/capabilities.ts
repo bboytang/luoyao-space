@@ -28,3 +28,16 @@ export interface CapabilityResult<Output = unknown> {
     message: string;
   };
 }
+
+
+import type { DeviceIdentity } from "./identity";
+
+export function isCapabilitySupportedOnDevice(
+  capability: CapabilityDefinition,
+  device: DeviceIdentity,
+): boolean {
+  return (
+    capability.supportedRuntimes.includes(device.runtime) &&
+    capability.requiredPermissions.every((permission) => permission.length > 0)
+  );
+}
