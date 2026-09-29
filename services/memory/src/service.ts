@@ -30,6 +30,7 @@ export function createMemoryService(repository: MemoryRepository, embedding?: Em
         userId: input.userId,
         companionId: input.companionId,
         query: input.query,
+        queryEmbedding,
         limit: Math.max(input.limit * 4, input.limit),
         now: input.now,
         relationshipWeight: input.relationshipWeight ?? 1,
