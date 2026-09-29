@@ -35,3 +35,9 @@ The repository owns tenant-scoped candidate retrieval and optional pgvector simi
 Embeddings are optional at the repository boundary. Without a query embedding, retrieval falls back to parameterized text containment and creation-time ordering. Semantic retrieval should be supplied by an upstream embedding provider.
 
 All user-controlled SQL values are parameterized, and every query is scoped by both `user_id` and `companion_id`.
+
+### Consolidation
+
+Before a selected write becomes durable, the consolidation layer can classify it as an exact duplicate, a replacement candidate, an unrelated new memory, or a memory that should coexist with an existing record.
+
+The current policy only permits automatic replacement for durable fact, preference, and decision memories when the new candidate is at least as important as a highly similar existing record. Storage mutation remains outside this pure policy layer.
