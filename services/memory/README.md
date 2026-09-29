@@ -24,3 +24,14 @@ Retrieval is a hybrid of semantic relevance, recency, importance and context.
 The ranking layer is deterministic and storage-independent. It combines semantic relevance, recency, importance, relationship relevance and project relevance. Each input signal is bounded between zero and one; malformed numeric values are clamped before scoring.
 
 The storage adapter is responsible for fetching candidate memories. The ranking layer is responsible only for ordering those candidates.
+
+
+## Production storage boundary
+
+`PostgresMemoryRepository` implements the storage contract through an injected `SqlClient`; it does not couple the Memory service to an ORM or PostgreSQL client package. The schema is defined in `database/migrations/001_create_memories.sql` and uses pgvector with a 1536-dimensional embedding column.
+
+The repository owns tenant-scoped candidate retrieval and optional pgvector similarity. The Memory Service owns over-fetching, application ranking, final limits, and access timestamps.
+
+Embeddings are optional at the repository boundary. Without a query embedding, retrieval falls back to parameterized text containment and creation-time ordering. Semantic retrieval should be supplied by an upstream embedding provider.
+
+All user-controlled SQL values are parameterized, and every query is scoped by both `user_id` and `companion_id`.
