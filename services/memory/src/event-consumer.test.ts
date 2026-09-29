@@ -6,7 +6,17 @@ describe("memory write event consumer", () => {
     const rememberCandidate = vi.fn(async () => ({
       action: "store" as const,
       reason: "stable_preference",
-      memory: { id: "m1" },
+      memory: {
+        id: "m1",
+        userId: "u1",
+        companionId: "c1",
+        kind: "preference",
+        content: "我喜欢无糖茶",
+        importance: 0.75,
+        relationshipRelevance: 0,
+        projectRelevance: 0,
+        createdAt: "2026-09-30T00:00:00Z",
+      },
     }));
 
     const result = await consumeMemoryWriteRequested({
