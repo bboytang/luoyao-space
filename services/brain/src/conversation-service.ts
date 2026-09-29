@@ -1,4 +1,4 @@
-import { DefaultModelRouter, type ModelRouter } from "./model-router";
+import type { ModelRouter } from "./model-router";
 import {
   directConversation,
   type BehaviorPolicy,
