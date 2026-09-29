@@ -6,7 +6,7 @@ describe("conversation service", () => {
     const order: string[] = [];
 
     const memory = {
-      retrieve: vi.fn(async () => {
+      recall: vi.fn(async () => {
         order.push("memory");
         return [{ id: "m1", content: "shared history", relevance: 0.9 }];
       }),
@@ -57,7 +57,7 @@ describe("conversation service", () => {
   });
 
   it("does not retrieve memory when the director explicitly disables it", async () => {
-    const memory = { retrieve: vi.fn(async () => []) };
+    const memory = { recall: vi.fn(async () => []) };
     const relationship = {
       get: vi.fn(async () => ({ stage: "new" as const, userInitiative: 0 }),
     };
@@ -82,7 +82,7 @@ describe("conversation service", () => {
     );
 
     expect(response.policy.useMemory).toBe("recent");
-    expect(memory.retrieve).toHaveBeenCalledTimes(1);
+    expect(memory.recall).toHaveBeenCalledTimes(1);
   });
 
   it("uses the larger memory window for explicit memory-driven tasks", async () => {
@@ -108,7 +108,7 @@ describe("conversation service", () => {
       { memory, relationship, model },
     );
 
-    expect(memory.retrieve).toHaveBeenCalledWith({
+    expect(memory.recall).toHaveBeenCalledWith({
       userId: "user-1",
       companionId: "companion-1",
       query: "帮我处理一下这个项目",
