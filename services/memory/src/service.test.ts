@@ -19,7 +19,6 @@ describe("MemoryService", () => {
         embeddingScore: 0.1,
       },
     ];
-
     const repository: MemoryRepository = {
       create: vi.fn(),
       replace: vi.fn(),
@@ -27,14 +26,10 @@ describe("MemoryService", () => {
       findCandidates: vi.fn(async () => records),
       markAccessed: vi.fn(async () => {}),
     };
-
     const service = createMemoryService(repository);
 
     const result = await service.recall({
-      userId: "u1",
-      companionId: "c1",
-      query: "project",
-      limit: 1,
+      userId: "u1", companionId: "c1", query: "project", limit: 1,
       now: "2026-09-30T00:00:00Z",
     });
 
@@ -44,35 +39,24 @@ describe("MemoryService", () => {
       expect.objectContaining({ userId: "u1", companionId: "c1", limit: 4 }),
     );
     expect(repository.markAccessed).toHaveBeenCalledWith(
-      ["m1"],
-      "2026-09-30T00:00:00Z",
+      ["m1"], "2026-09-30T00:00:00Z",
     );
   });
 
   it("preserves empty recall without attempting access updates", async () => {
     const repository: MemoryRepository = {
-      create: vi.fn(),
-      replace: vi.fn(),
-      remove: vi.fn(async () => {}),
-      findCandidates: vi.fn(async () => []),
-      markAccessed: vi.fn(async () => {}),
+      create: vi.fn(), replace: vi.fn(), remove: vi.fn(async () => {}),
+      findCandidates: vi.fn(async () => []), markAccessed: vi.fn(async () => {}),
     };
-
     const service = createMemoryService(repository);
 
-    await expect(
-      service.recall({
-        userId: "u1",
-        companionId: "c1",
-        query: "missing",
-        limit: 4,
-        now: "2026-09-30T00:00:00Z",
-      }),
-    ).resolves.toEqual([]);
+    await expect(service.recall({
+      userId: "u1", companionId: "c1", query: "missing", limit: 4,
+      now: "2026-09-30T00:00:00Z",
+    })).resolves.toEqual([]);
 
     expect(repository.markAccessed).not.toHaveBeenCalled();
   });
-});
 
   it("applies write policy before persistence and emits memory.created", async () => {
     const repository: MemoryRepository = {
@@ -94,26 +78,22 @@ describe("MemoryService", () => {
     };
     const emitted: string[] = [];
     const service = createMemoryService(repository, undefined, {
-      async emit(event) {
-        emitted.push(event.type);
-      },
+      async emit(event) { emitted.push(event.type); },
     });
 
     const skipped = await service.rememberCandidate({
-      userId: "u1",
-      companionId: "c1",
-      userMessage: "普通闲聊",
+      userId: "u1", companionId: "c1", userMessage: "普通闲聊",
     });
     expect(skipped.action).toBe("skip");
     expect(repository.create).not.toHaveBeenCalled();
 
     const stored = await service.rememberCandidate({
-      userId: "u1",
-      companionId: "c1",
-      userMessage: "我喜欢无糖茶",
+      userId: "u1", companionId: "c1", userMessage: "我喜欢无糖茶",
       containsStablePreference: true,
     });
     expect(stored.action).toBe("store");
+    if (stored.action !== "store") throw new Error("expected stored memory");
+    expect(stored.memory.kind).toBe("preference");
     expect(repository.create).toHaveBeenCalledOnce();
     expect(emitted).toEqual(["memory.created"]);
   });
@@ -138,19 +118,17 @@ describe("MemoryService", () => {
     };
     const emitted: string[] = [];
     const service = createMemoryService(repository, undefined, {
-      async emit(event) {
-        emitted.push(event.type);
-      },
+      async emit(event) { emitted.push(event.type); },
     });
 
     const result = await service.rememberCandidate({
-      userId: "u1",
-      companionId: "c1",
+      userId: "u1", companionId: "c1",
       userMessage: "我现在更喜欢无糖咖啡",
       containsStablePreference: true,
     });
 
     expect(result.action).toBe("replace_existing");
+    if (result.action !== "replace_existing") throw new Error("expected replacement");
     expect(result.memory.content).toBe("我现在更喜欢无糖咖啡");
     expect(repository.replace).toHaveBeenCalledOnce();
     expect(emitted).toEqual(["memory.updated"]);
@@ -158,25 +136,19 @@ describe("MemoryService", () => {
 
   it("emits memory.deleted when removing a memory", async () => {
     const repository: MemoryRepository = {
-      create: vi.fn(),
-      replace: vi.fn(),
-      remove: vi.fn(async () => {}),
-      findCandidates: vi.fn(async () => []),
-      markAccessed: vi.fn(),
+      create: vi.fn(), replace: vi.fn(), remove: vi.fn(async () => {}),
+      findCandidates: vi.fn(async () => []), markAccessed: vi.fn(),
     };
     const emitted: string[] = [];
     const service = createMemoryService(repository, undefined, {
-      async emit(event) {
-        emitted.push(event.type);
-      },
+      async emit(event) { emitted.push(event.type); },
     });
 
     await service.remove({ userId: "u1", companionId: "c1", memoryId: "m1" });
 
     expect(repository.remove).toHaveBeenCalledWith({
-      userId: "u1",
-      companionId: "c1",
-      memoryId: "m1",
+      userId: "u1", companionId: "c1", memoryId: "m1",
     });
     expect(emitted).toEqual(["memory.deleted"]);
   });
+});
