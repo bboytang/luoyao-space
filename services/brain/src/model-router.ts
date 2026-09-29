@@ -54,6 +54,8 @@ export class DefaultModelRouter implements ModelRouter {
       ? this.providers.find((candidate) =>
           candidate.id === preferred &&
           candidate.supports.includes(request.modelClass),
+        ) ?? this.providers.find((candidate) =>
+          candidate.supports.includes(request.modelClass),
         )
       : this.providers.find((candidate) =>
           candidate.supports.includes(request.modelClass),
