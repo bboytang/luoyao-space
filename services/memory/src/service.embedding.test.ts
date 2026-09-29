@@ -7,6 +7,8 @@ describe("MemoryService embeddings", () => {
     const findCandidates = vi.fn(async () => []);
     const repository: MemoryRepository = {
       create: vi.fn(),
+      replace: vi.fn(),
+      remove: vi.fn(async () => {}),
       findCandidates,
       markAccessed: vi.fn(async () => {}),
     };
@@ -37,10 +39,43 @@ describe("MemoryService embeddings", () => {
     );
   });
 
-  it("rejects invalid provider vectors before repository retrieval", async () => {\n    const findCandidates = vi.fn(async () => []);\n    const repository: MemoryRepository = { create: vi.fn(), findCandidates, markAccessed: vi.fn(async () => {}) };\n    const embedding = { id: "bad", embed: vi.fn(async () => ({ providerId: "bad", vector: [Number.NaN] })) };\n    const service = createMemoryService(repository, embedding);\n\n    await expect(service.recall({ userId: "u1", companionId: "c1", query: "project", limit: 4, now: "2026-09-30T00:00:00Z" })).rejects.toThrow("Embedding must contain finite values");\n    expect(findCandidates).not.toHaveBeenCalled();\n  });\n\n  it("keeps lexical retrieval available without an embedding provider", async () => {
+  it("rejects invalid provider vectors before repository retrieval", async () => {
     const findCandidates = vi.fn(async () => []);
     const repository: MemoryRepository = {
       create: vi.fn(),
+      replace: vi.fn(),
+      remove: vi.fn(async () => {}),
+      findCandidates,
+      markAccessed: vi.fn(async () => {}),
+    };
+    const embedding = {
+      id: "bad",
+      embed: vi.fn(async () => ({
+        providerId: "bad",
+        vector: [Number.NaN],
+      })),
+    };
+    const service = createMemoryService(repository, embedding);
+
+    await expect(
+      service.recall({
+        userId: "u1",
+        companionId: "c1",
+        query: "project",
+        limit: 4,
+        now: "2026-09-30T00:00:00Z",
+      }),
+    ).rejects.toThrow("Embedding must contain finite values");
+
+    expect(findCandidates).not.toHaveBeenCalled();
+  });
+
+  it("keeps lexical retrieval available without an embedding provider", async () => {
+    const findCandidates = vi.fn(async () => []);
+    const repository: MemoryRepository = {
+      create: vi.fn(),
+      replace: vi.fn(),
+      remove: vi.fn(async () => {}),
       findCandidates,
       markAccessed: vi.fn(async () => {}),
     };
