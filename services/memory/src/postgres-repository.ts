@@ -69,6 +69,23 @@ export class PostgresMemoryRepository implements MemoryRepository {
     return toRecord(row);
   }
 
+  async replace(input: { userId: string; companionId: string; memoryId: string; update: CreateMemoryInput }): Promise<MemoryRecord> {
+    const result = await this.client.query<MemoryRow>(
+      "UPDATE memories SET kind=$4,content=$5,importance=$6,relationship_relevance=$7,project_relevance=$8,created_at=COALESCE($9::timestamptz,now()),embedding=$10::vector WHERE id=$1::uuid AND user_id=$2 AND companion_id=$3 RETURNING id,user_id,companion_id,kind,content,importance,relationship_relevance,project_relevance,created_at::text,last_accessed_at::text,NULL::double precision AS embedding_score",
+      [input.memoryId,input.userId,input.companionId,input.update.kind,input.update.content,input.update.importance ?? 0.5,input.update.relationshipRelevance ?? 0,input.update.projectRelevance ?? 0,input.update.createdAt ?? null,input.update.embedding ? vectorLiteral(input.update.embedding) : null],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Memory not found");
+    return toRecord(row);
+  }
+
+  async remove(input: { userId: string; companionId: string; memoryId: string }): Promise<void> {
+    await this.client.query(
+      "DELETE FROM memories WHERE id=$1::uuid AND user_id=$2 AND companion_id=$3",
+      [input.memoryId,input.userId,input.companionId],
+    );
+  }
+
   async findCandidates(query: MemoryCandidateQuery): Promise<MemoryRecord[]> {
     const embedding = query.queryEmbedding ? vectorLiteral(query.queryEmbedding) : null;
     const result = await this.client.query<MemoryRow>(
