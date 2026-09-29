@@ -25,7 +25,23 @@ describe("RealtimeSession", () => {
     session.transition("speech_start");
 
     expect(session.transition("abort")).toBe("aborting");
+    expect(session.transition("abort_complete")).toBe("ready");
     expect(session.transition("listen_start")).toBe("listening");
+  });
+
+  it("does not start a new listen cycle before abort cleanup completes", () => {
+    const session = new RealtimeSession("session-3a");
+
+    session.transition("hello");
+    session.transition("listen_start");
+    session.transition("listen_stop");
+    session.transition("speech_start");
+    session.transition("abort");
+
+    expect(() => session.transition("listen_start")).toThrow(
+      InvalidSessionTransitionError,
+    );
+    expect(session.transition("abort_complete")).toBe("ready");
   });
 
   it("rejects invalid transitions", () => {
