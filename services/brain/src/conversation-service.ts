@@ -1,3 +1,4 @@
+import { DefaultModelRouter, type ModelRouter } from "./model-router";
 import {
   directConversation,
   type BehaviorPolicy,
@@ -24,6 +25,18 @@ export interface ConversationModelRequest {
 
 export interface ConversationModel {
   generate(request: ConversationModelRequest): Promise<string>;
+}
+
+export class RoutedConversationModel implements ConversationModel {
+  constructor(private readonly router: ModelRouter) {}
+
+  async generate(request: ConversationModelRequest): Promise<string> {
+    const result = await this.router.generate({
+      modelClass: "fast_chat",
+      input: request,
+    });
+    return result.text;
+  }
 }
 
 export interface ConversationMemoryStore {
