@@ -36,8 +36,5 @@ export function isCapabilitySupportedOnDevice(
   capability: CapabilityDefinition,
   device: DeviceIdentity,
 ): boolean {
-  return (
-    capability.supportedRuntimes.includes(device.runtime) &&
-    capability.requiredPermissions.every((permission) => permission.length > 0)
-  );
+  return capability.supportedRuntimes.includes(device.runtime);
 }
