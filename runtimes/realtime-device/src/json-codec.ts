@@ -56,7 +56,7 @@ export const jsonCodec: TransportCodec = {
       throw new TransportProtocolError("Invalid ping timestamp");
     }
 
-    return message as RealtimeControlMessage;
+    return message as unknown as RealtimeControlMessage;
   },
 
   encodeControl(message: RealtimeServerMessage): string {
