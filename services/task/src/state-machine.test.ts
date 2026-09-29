@@ -32,6 +32,7 @@ describe("task state machine", () => {
   });
 
   it("rejects direct approval transition bypass", () => {
+    expect(canTransition("WAITING_APPROVAL", "RUNNING")).toBe(false);
     expect(() => transition("WAITING_APPROVAL", "RUNNING")).toThrow(
       "Approval transition requires transitionAfterApproval",
     );
