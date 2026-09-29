@@ -26,6 +26,8 @@ export async function* runAudioPipeline(
 
   const frames = new AudioFrameBuffer({ maxFrames: 256 });
 
+  let feederError: Error | undefined;
+
   const feeder = (async () => {
     try {
       for await (const frame of input) {
@@ -34,6 +36,8 @@ export async function* runAudioPipeline(
         metrics.inputFrames += 1;
         frames.push(frame);
       }
+    } catch (error) {
+      feederError = error instanceof Error ? error : new Error(String(error));
     } finally {
       frames.end();
     }
@@ -99,6 +103,12 @@ export async function* runAudioPipeline(
       }
     }
 
+    await feeder;
+    if (feederError) {
+      yield { type: "error", error: feederError };
+      return;
+    }
+
     metrics.totalResponseMs = Date.now() - startedAt;
     yield { type: "completed" };
   } catch (error) {
@@ -109,8 +119,6 @@ export async function* runAudioPipeline(
   } finally {
     if (context.signal.aborted) {
       frames.end();
-    } else {
-      await feeder;
     }
   }
 }
