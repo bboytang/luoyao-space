@@ -10,7 +10,7 @@ describe("memory write event consumer", () => {
         id: "m1",
         userId: "u1",
         companionId: "c1",
-        kind: "preference",
+        kind: "preference" as const,
         content: "我喜欢无糖茶",
         importance: 0.75,
         relationshipRelevance: 0,
