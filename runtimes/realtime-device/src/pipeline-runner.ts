@@ -62,6 +62,17 @@ export async function* runAudioPipeline(
       yield { type: "stt", text: finalText };
     }
 
+    await feeder;
+    if (context.signal.aborted) {
+      yield { type: "aborted" };
+      return;
+    }
+
+    if (feederError) {
+      yield { type: "error", error: feederError };
+      return;
+    }
+
     if (!finalText.trim()) {
       yield { type: "completed" };
       return;
@@ -101,12 +112,6 @@ export async function* runAudioPipeline(
           yield { type: "tts_audio", frame: ttsEvent.frame };
         }
       }
-    }
-
-    await feeder;
-    if (feederError) {
-      yield { type: "error", error: feederError };
-      return;
     }
 
     metrics.totalResponseMs = Date.now() - startedAt;
