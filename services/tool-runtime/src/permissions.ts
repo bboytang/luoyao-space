@@ -12,7 +12,8 @@ const minimumAutonomy: Record<RiskLevel, AutonomyLevel> = {
 export interface PermissionContext {
   autonomy: AutonomyLevel;
   grantedPermissions: string[];
-  devicePermissions: string[];
+  deviceId: string;
+  devicePermissions: Record<string, string[]>;
   approvalGranted: boolean;
 }
 
@@ -36,7 +37,7 @@ export function authorize(
 
   const granted = new Set([
     ...context.grantedPermissions,
-    ...context.devicePermissions,
+    ...(context.devicePermissions[context.deviceId] ?? []),
   ]);
 
   const missing = requiredPermissions.filter((permission) => !granted.has(permission));
