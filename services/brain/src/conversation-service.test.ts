@@ -56,7 +56,7 @@ describe("conversation service", () => {
     expect(events.emit).toHaveBeenCalledTimes(2);
   });
 
-  it("does not retrieve memory when the director explicitly disables it", async () => {
+  it("retrieves recent memory when the director requests recent context", async () => {
     const memory = { recall: vi.fn(async () => []) };
     const relationship = {
       get: vi.fn(async () => ({ stage: "new" as const, userInitiative: 0 }),
@@ -86,7 +86,7 @@ describe("conversation service", () => {
   });
 
   it("uses the larger memory window for explicit memory-driven tasks", async () => {
-    const memory = { retrieve: vi.fn(async () => []) };
+    const memory = { recall: vi.fn(async () => []) };
     const relationship = {
       get: vi.fn(async () => ({ stage: "familiar" as const, userInitiative: 0.5 }),
     };
