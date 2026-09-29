@@ -38,3 +38,18 @@ export function isCapabilitySupportedOnDevice(
 ): boolean {
   return capability.supportedRuntimes.includes(device.runtime);
 }
+
+
+export function isInvocationBoundToUserDevice(
+  invocation: CapabilityInvocation,
+  device?: DeviceIdentity,
+): boolean {
+  if (!device) {
+    return invocation.deviceId === undefined;
+  }
+
+  return (
+    invocation.userId === device.userId &&
+    (invocation.deviceId === undefined || invocation.deviceId === device.deviceId)
+  );
+}
