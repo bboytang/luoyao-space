@@ -1,0 +1,88 @@
+import type { MemoryKind, MemoryRecord } from "./ranking";
+import type { CreateMemoryInput, MemoryCandidateQuery, MemoryRepository } from "./repository";
+
+export interface SqlQueryResult<Row> {
+  rows: Row[];
+}
+
+export interface SqlClient {
+  query<Row = unknown>(text: string, values?: readonly unknown[]): Promise<SqlQueryResult<Row>>;
+}
+
+interface MemoryRow {
+  id: string;
+  user_id: string;
+  companion_id: string;
+  kind: MemoryKind;
+  content: string;
+  importance: number;
+  relationship_relevance: number;
+  project_relevance: number;
+  created_at: string;
+  last_accessed_at: string | null;
+  embedding_score: number | null;
+}
+
+function toRecord(row: MemoryRow): MemoryRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    companionId: row.companion_id,
+    kind: row.kind,
+    content: row.content,
+    importance: Number(row.importance),
+    relationshipRelevance: Number(row.relationship_relevance),
+    projectRelevance: Number(row.project_relevance),
+    createdAt: row.created_at,
+    ...(row.last_accessed_at ? { lastAccessedAt: row.last_accessed_at } : {}),
+    ...(row.embedding_score !== null ? { embeddingScore: Number(row.embedding_score) } : {}),
+  };
+}
+
+function vectorLiteral(vector: readonly number[]): string {
+  if (vector.length === 0 || vector.some((value) => !Number.isFinite(value))) {
+    throw new Error("Memory query embedding must contain finite values");
+  }
+  return "[" + vector.join(",") + "]";
+}
+
+export class PostgresMemoryRepository implements MemoryRepository {
+  constructor(private readonly client: SqlClient) {}
+
+  async create(input: CreateMemoryInput): Promise<MemoryRecord> {
+    const result = await this.client.query<MemoryRow>(
+      "INSERT INTO memories (user_id, companion_id, kind, content, importance, relationship_relevance, project_relevance, created_at, embedding) VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8::timestamptz,now()),$9::vector) RETURNING id,user_id,companion_id,kind,content,importance,relationship_relevance,project_relevance,created_at::text,last_accessed_at::text,NULL::double precision AS embedding_score",
+      [
+        input.userId,
+        input.companionId,
+        input.kind,
+        input.content,
+        input.importance ?? 0.5,
+        input.relationshipRelevance ?? 0,
+        input.projectRelevance ?? 0,
+        input.createdAt ?? null,
+        input.embedding ? vectorLiteral(input.embedding) : null,
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Memory insert returned no row");
+    return toRecord(row);
+  }
+
+  async findCandidates(query: MemoryCandidateQuery): Promise<MemoryRecord[]> {
+    const embedding = query.queryEmbedding ? vectorLiteral(query.queryEmbedding) : null;
+    const result = await this.client.query<MemoryRow>(
+      "SELECT id,user_id,companion_id,kind,content,importance,relationship_relevance,project_relevance,created_at::text,last_accessed_at::text,CASE WHEN $6::vector IS NULL OR embedding IS NULL THEN 0 ELSE 1-(embedding <=> $6::vector) END AS embedding_score FROM memories WHERE user_id=$1 AND companion_id=$2 AND ($3 = '' OR content ILIKE '%' || $3 || '%') ORDER BY CASE WHEN $6::vector IS NULL OR embedding IS NULL THEN 0 ELSE 1-(embedding <=> $6::vector) END DESC, created_at DESC LIMIT $4",
+      [query.userId, query.companionId, query.query.trim(), query.limit, query.now, embedding],
+    );
+    return result.rows.map(toRecord);
+  }
+
+  async markAccessed(memoryIds: readonly string[], accessedAt: string): Promise<void> {
+    if (memoryIds.length === 0) return;
+    await this.client.query(
+      "UPDATE memories SET last_accessed_at=$2::timestamptz WHERE id=ANY($1::uuid[])",
+      [memoryIds, accessedAt],
+    );
+  }
+}
