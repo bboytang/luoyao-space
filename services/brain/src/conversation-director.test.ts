@@ -32,6 +32,30 @@ describe("conversation director", () => {
     expect(policy.teasingProbability).toBeGreaterThan(0.4);
   });
 
+  it("reduces repeated advice and reflects emotional intensity", () => {
+    const baseline = directConversation({
+      userMessage: "今天有点累",
+      recentQuestionCount: 0,
+      recentAdviceCount: 0,
+      relationshipStage: "familiar",
+      userInitiative: 0.5,
+      emotionalIntensity: 0.1,
+      topicIsTaskLike: false,
+    });
+    const repeated = directConversation({
+      userMessage: "今天有点累",
+      recentQuestionCount: 0,
+      recentAdviceCount: 3,
+      relationshipStage: "familiar",
+      userInitiative: 0.5,
+      emotionalIntensity: 0.8,
+      topicIsTaskLike: false,
+    });
+
+    expect(repeated.adviceProbability).toBeLessThan(baseline.adviceProbability);
+    expect(repeated.emotionIntensity).toBeGreaterThan(baseline.emotionIntensity);
+  });
+
   it("switches to solution behavior for tasks", () => {
     const policy = directConversation({
       userMessage: "帮我把这个项目拆成任务",
