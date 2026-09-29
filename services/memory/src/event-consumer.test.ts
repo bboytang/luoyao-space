@@ -36,7 +36,7 @@ describe("memory write event consumer", () => {
   });
 
   it("rejects empty write requests before touching MemoryService", async () => {
-    const rememberCandidate = vi.fn();
+    const rememberCandidate = vi.fn(async () => ({ action: "skip" as const, reason: "test" }));
 
     await expect(consumeMemoryWriteRequested({
       type: "memory.write.requested",
