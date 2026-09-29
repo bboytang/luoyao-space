@@ -1,3 +1,13 @@
+<!--
+Design Reference
+
+Inspired by: XiaoZhi open-source realtime/device implementations
+License reference: MIT
+
+This document records research and design references for Luoyao Space.
+It is not copied upstream code.
+-->
+
 # Realtime / Device Runtime Research
 
 This document records reusable realtime and device-runtime patterns identified from external open-source implementations.
