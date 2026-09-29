@@ -17,7 +17,31 @@ async function* neverEndingInput(): AsyncIterable<AudioFrame> {
   await new Promise<void>(() => {});
 }
 
+async function* failingInput(): AsyncIterable<AudioFrame> {
+  throw new Error("input failed");
+}
+
 describe("runAudioPipeline", () => {
+  it("surfaces input feeder failures", async () => {
+    const pipeline: AudioPipeline = {
+      vad: { detect: async () => ({ speech: false, startOfSpeech: false, endOfSpeech: true }) },
+      asr: { async *transcribe() { yield { type: "final", text: "" as const }; } },
+      llm: { async *stream() {} },
+      tts: { async *synthesize() {} },
+    };
+
+    const outputs: string[] = [];
+    for await (const output of runAudioPipeline(pipeline, failingInput(), {
+      sessionId: "session-failure",
+      conversationId: "conversation-failure",
+      signal: new AbortController().signal,
+    })) {
+      outputs.push(output.type);
+    }
+
+    expect(outputs).toEqual(["stt", "error"]);
+  });
+
   it("does not wait for a live input stream after abort", async () => {
     const controller = new AbortController();
 
