@@ -79,7 +79,7 @@ export interface ConversationResponse {
 }
 
 export interface ConversationServiceDependencies {
-  memory: Pick<MemoryService, "recall"> & Partial<Pick<MemoryService, "rememberCandidate">>;
+  memory: Pick<MemoryService, "recall">;
   relationship: ConversationRelationshipStore;
   model: ConversationModel;
   events?: ConversationEventSink;
@@ -124,16 +124,19 @@ export async function respondToConversation(
     relationship,
   });
 
-  if (request.memoryWriteSignals && dependencies.memory.rememberCandidate) {
-    await dependencies.memory.rememberCandidate({
-      userId: request.userId,
-      companionId: request.companionId,
-      userMessage: request.userMessage,
-      ...request.memoryWriteSignals,
-    });
-  }
-
   if (dependencies.events) {
+    if (request.memoryWriteSignals) {
+      await dependencies.events.emit({
+        type: "memory.write.requested",
+        userId: request.userId,
+        companionId: request.companionId,
+        sessionId: request.sessionId,
+        data: {
+          userMessage: request.userMessage,
+          signals: request.memoryWriteSignals,
+        },
+      });
+    }
     await dependencies.events.emit({
       type: "conversation.updated",
       userId: request.userId,
