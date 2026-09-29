@@ -7,10 +7,10 @@ All cross-service events use a versioned envelope.
   "id": "event-id",
   "type": "task.completed",
   "version": 1,
-  "occurred_at": "2026-01-01T00:00:00Z",
-  "user_id": "user-id",
-  "companion_id": "companion-id",
-  "session_id": "session-id",
+  "occurredAt": "2026-01-01T00:00:00Z",
+  "userId": "user-id",
+  "companionId": "companion-id",
+  "sessionId": "session-id",
   "source": "task-service",
   "data": {}
 }
