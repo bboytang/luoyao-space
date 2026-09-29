@@ -123,21 +123,22 @@ notification.requested
 
 Events are durable where required and are the synchronization mechanism between brain, agent and runtimes.
 
-## 7. XiaoZhi integration
+## 7. External runtime compatibility
 
-XiaoZhi is treated as one runtime implementation.
+External realtime/device implementations are treated as runtime adapters rather than product architecture.
 
-Its useful concepts are isolated behind Luoyao Space interfaces so the product does not become coupled to XiaoZhi's application/server topology.
+Their useful protocol, audio, device, MCP and avatar concepts are isolated behind Luoyao Space interfaces so the product does not become coupled to any one external project's application/server topology.
 
 Target:
 
 ```
-runtimes/xiaozhi/
-  protocol/
-  audio/
-  session/
-  device/
-  mcp/
+runtimes/
+  realtime-device/
+    protocol/
+    audio/
+    session/
+    device/
+    tools/
 ```
 
 The runtime can eventually be replaced or supplemented without changing Brain or Agent OS.
