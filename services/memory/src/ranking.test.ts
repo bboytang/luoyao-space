@@ -61,6 +61,15 @@ describe("rankMemories", () => {
     expect(result[0].id).toBe("relationship");
   });
 
+  it("handles invalid timestamps without producing NaN", () => {
+    const result = rankMemories(
+      [{ ...base, createdAt: "not-a-date" }],
+      { now: "2026-09-29T00:00:00Z", query: "anything", relationshipWeight: 1, projectWeight: 1 },
+    );
+
+    expect(Number.isFinite(result[0].score)).toBe(true);
+  });
+
   it("clamps malformed relevance values instead of producing invalid scores", () => {
     const result = rankMemories(
       [{ ...base, embeddingScore: 99, importance: -10 }],
