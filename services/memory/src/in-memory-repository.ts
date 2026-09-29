@@ -26,6 +26,31 @@ export class InMemoryMemoryRepository implements MemoryRepository {
     return record;
   }
 
+  async replace(input: { userId: string; companionId: string; memoryId: string; update: CreateMemoryInput }): Promise<MemoryRecord> {
+    const existing = this.records.get(input.memoryId);
+    if (!existing || existing.userId !== input.userId || existing.companionId !== input.companionId) {
+      throw new Error("Memory not found");
+    }
+    const record: MemoryRecord = {
+      ...existing,
+      kind: input.update.kind,
+      content: input.update.content,
+      importance: input.update.importance ?? existing.importance,
+      relationshipRelevance: input.update.relationshipRelevance ?? existing.relationshipRelevance,
+      projectRelevance: input.update.projectRelevance ?? existing.projectRelevance,
+      createdAt: input.update.createdAt ?? new Date().toISOString(),
+    };
+    this.records.set(input.memoryId, record);
+    return record;
+  }
+
+  async remove(input: { userId: string; companionId: string; memoryId: string }): Promise<void> {
+    const existing = this.records.get(input.memoryId);
+    if (existing && existing.userId === input.userId && existing.companionId === input.companionId) {
+      this.records.delete(input.memoryId);
+    }
+  }
+
   async findCandidates(query: MemoryCandidateQuery): Promise<MemoryRecord[]> {
     const normalized = query.query.trim().toLowerCase();
 
