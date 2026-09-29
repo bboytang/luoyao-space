@@ -22,7 +22,11 @@ export function createMemoryService(repository: MemoryRepository, embedding?: Em
     },
 
     async recall(input) {
-      const queryEmbedding = embedding\n        ? (await embedding.embed({ text: input.query })).vector\n        : undefined;\n\n      const candidates = await repository.findCandidates({
+      const queryEmbedding = embedding
+        ? (await embedding.embed({ text: input.query })).vector
+        : undefined;
+
+      const candidates = await repository.findCandidates({
         userId: input.userId,
         companionId: input.companionId,
         query: input.query,
