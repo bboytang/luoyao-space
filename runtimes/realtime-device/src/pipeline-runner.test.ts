@@ -79,10 +79,11 @@ describe("runAudioPipeline", () => {
       signal: controller.signal,
     });
 
-    const first = await iterator.next();
+    const asyncIterator = iterator[Symbol.asyncIterator]();
+    const first = await asyncIterator.next();
     outputs.push(first.value?.type ?? "none");
 
-    const second = await iterator.next();
+    const second = await asyncIterator.next();
     outputs.push(second.value?.type ?? "none");
 
     expect(outputs).toEqual(["stt", "aborted"]);
