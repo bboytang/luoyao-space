@@ -27,3 +27,16 @@ models:
 ```
 
 Routing decisions can depend on latency, cost, task type, privacy requirements and availability.
+
+
+## Runtime contract
+
+The router owns provider selection; Brain owns conversation behavior. Brain does not select a concrete provider or model name.
+
+Provider selection follows this order:
+
+1. use the configured provider when it supports the requested model class;
+2. otherwise use another available provider supporting that class;
+3. if none exists, fail explicitly with a routing error.
+
+A provider failure is not silently converted into a successful response. Retry/failover policy belongs above the provider call so the system can distinguish transient availability from model output errors.
