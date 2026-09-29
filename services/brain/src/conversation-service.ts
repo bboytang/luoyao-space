@@ -1,4 +1,5 @@
 import type { ModelRouter } from "./model-router";
+import type { MemoryService } from "../memory/src/service";
 import {
   directConversation,
   type BehaviorPolicy,
@@ -39,15 +40,6 @@ export class RoutedConversationModel implements ConversationModel {
   }
 }
 
-export interface ConversationMemoryStore {
-  retrieve(input: {
-    userId: string;
-    companionId: string;
-    query: string;
-    limit: number;
-  }): Promise<ConversationMemory[]>;
-}
-
 export interface ConversationRelationshipStore {
   get(input: {
     userId: string;
@@ -85,7 +77,7 @@ export interface ConversationResponse {
 }
 
 export interface ConversationServiceDependencies {
-  memory: ConversationMemoryStore;
+  memory: Pick<MemoryService, "recall">;
   relationship: ConversationRelationshipStore;
   model: ConversationModel;
   events?: ConversationEventSink;
@@ -111,12 +103,17 @@ export async function respondToConversation(
   const memories =
     policy.useMemory === "none"
       ? []
-      : await dependencies.memory.retrieve({
+      : (await dependencies.memory.recall({
           userId: request.userId,
           companionId: request.companionId,
           query: request.userMessage,
           limit: policy.useMemory === "memory" ? 8 : 4,
-        });
+          now: new Date().toISOString(),
+        })).map((memory) => ({
+          id: memory.id,
+          content: memory.content,
+          relevance: memory.score,
+        }));
 
   const text = await dependencies.model.generate({
     userMessage: request.userMessage,
