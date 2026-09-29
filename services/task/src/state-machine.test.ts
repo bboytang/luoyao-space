@@ -31,6 +31,12 @@ describe("task state machine", () => {
     expect(transitionAfterApproval(task)).toBe("RUNNING");
   });
 
+  it("rejects direct approval transition bypass", () => {
+    expect(() => transition("WAITING_APPROVAL", "RUNNING")).toThrow(
+      "Approval transition requires transitionAfterApproval",
+    );
+  });
+
   it("rejects execution without explicit approval", () => {
     const task = {
       taskId: "task-2",
