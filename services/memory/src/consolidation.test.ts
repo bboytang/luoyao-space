@@ -11,7 +11,7 @@ const existing = {
   relationshipRelevance: 0,
   projectRelevance: 0,
   createdAt: "2026-09-29T00:00:00.000Z",
-  embeddingScore: 0.2,
+  embeddingScore: 0.96,
 };
 
 describe("memory consolidation", () => {
@@ -37,9 +37,10 @@ describe("memory consolidation", () => {
   });
 
   it("stores unrelated memories", () => {
+    const unrelatedExisting = { ...existing, embeddingScore: 0.2 };
     expect(consolidateMemory(
       { kind: "preference", content: "喜欢早上聊天", importance: 0.7, embeddingScore: 0.2 },
-      [existing],
+      [unrelatedExisting],
     )).toEqual({ action: "store", reason: "no_similar_memory" });
   });
 });
