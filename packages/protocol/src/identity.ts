@@ -12,7 +12,7 @@ export interface CompanionIdentity {
 export interface DeviceIdentity {
   deviceId: string;
   userId: string;
-  runtime: "web" | "ios" | "android" | "desktop" | "xiaozhi" | "iot";
+  runtime: "web" | "ios" | "android" | "desktop" | "iot";
   label?: string;
 }
 
