@@ -2,6 +2,8 @@ export type EventType =
   | "conversation.created"
   | "conversation.updated"
   | "memory.created"
+  | "memory.updated"
+  | "memory.deleted"
   | "relationship.changed"
   | "emotion.changed"
   | "task.created"
