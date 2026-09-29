@@ -25,6 +25,8 @@ export interface MemoryCandidateQuery {
 
 export interface MemoryRepository {
   create(input: CreateMemoryInput): Promise<MemoryRecord>;
+  replace(input: { userId: string; companionId: string; memoryId: string; update: CreateMemoryInput }): Promise<MemoryRecord>;
+  remove(input: { userId: string; companionId: string; memoryId: string }): Promise<void>;
   findCandidates(query: MemoryCandidateQuery): Promise<MemoryRecord[]>;
   markAccessed(memoryIds: readonly string[], accessedAt: string): Promise<void>;
 }
