@@ -4,7 +4,9 @@ Owns conversation orchestration.
 
 Responsibilities:
 
-- load relevant memory
+- load relationship state before response policy decisions
+- run Conversation Director before model generation
+- load relevant memory according to the selected behavior policy
 - load relationship/persona state
 - ask Conversation Director for behavior policy
 - select model route
