@@ -10,6 +10,7 @@
   },
   "include": [
     "packages/**/*.ts",
-    "services/**/*.ts"
+    "services/**/*.ts",
+    "runtimes/**/*.ts"
   ]
 }
