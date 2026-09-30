@@ -2,7 +2,7 @@ import type { RealtimeAudioInput, RealtimeAudioOutput } from "../../../runtimes/
 import { binaryAudioCodec } from "../../../runtimes/realtime-device/src/binary-audio-codec";
 import { RealtimeSession } from "../../../runtimes/realtime-device/src/realtime-session";
 import { WebSocketTransport, type WebSocketLike } from "../../../runtimes/realtime-device/src/websocket-transport";
-import { RealtimeAvatarController } from "./realtime-avatar-controller";
+import { RealtimeAvatarController } from "../../../runtimes/realtime-device/src/realtime-avatar-controller";
 import { AvatarRuntime } from "../../../runtimes/avatar/src/runtime";
 
 export interface RealtimeClientSocket extends WebSocketLike {
@@ -92,9 +92,7 @@ export class RealtimeClient {
   constructor(options: RealtimeClientOptions) {
     const socket = options.socket ?? new BrowserWebSocket(options.url);
     const transport = new WebSocketTransport(socket, binaryAudioCodec);
-    const avatarController = new RealtimeAvatarController({
-      avatar: options.avatar,
-    });
+    const avatarController = new RealtimeAvatarController(options.avatar);
 
     this.sessionId = options.sessionId ?? createSessionId();
     this.deviceId = options.deviceId;
