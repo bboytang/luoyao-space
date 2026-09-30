@@ -1,4 +1,5 @@
 import type { AvatarEmotionEventData } from "../../../packages/protocol/src/avatar";
+import type { AvatarEmotionEvent } from "../../../packages/protocol/src/events";
 
 export type AvatarActivity = "idle" | "listening" | "thinking" | "speaking";
 
@@ -29,14 +30,7 @@ export class AvatarRuntime {
   constructor(options: AvatarRuntimeOptions) {
     this.renderer = options.renderer;
     this.clock = options.clock ?? Date.now;
-    this.state = {
-      emotion: "calm",
-      intensity: 0,
-      expression: "neutral",
-      activity: "idle",
-      speaking: false,
-      updatedAt: this.clock(),
-    };
+    this.state = { emotion: "calm", intensity: 0, expression: "neutral", activity: "idle", speaking: false, updatedAt: this.clock() };
     this.renderer.render(this.state);
   }
 
@@ -48,6 +42,11 @@ export class AvatarRuntime {
     return this.state;
   }
 
+  handleEvent(event: AvatarEmotionEvent): Readonly<AvatarState> {
+    if (event.type !== "avatar.emotion") return this.state;
+    return this.applyEmotion(event.data);
+  }
+
   setActivity(activity: AvatarActivity): Readonly<AvatarState> {
     this.state = { ...this.state, activity, speaking: activity === "speaking", updatedAt: this.clock() };
     this.renderer.render(this.state);
@@ -55,12 +54,7 @@ export class AvatarRuntime {
   }
 
   setSpeaking(speaking: boolean): Readonly<AvatarState> {
-    this.state = {
-      ...this.state,
-      speaking,
-      activity: speaking ? "speaking" : this.state.activity === "speaking" ? "idle" : this.state.activity,
-      updatedAt: this.clock(),
-    };
+    this.state = { ...this.state, speaking, activity: speaking ? "speaking" : this.state.activity === "speaking" ? "idle" : this.state.activity, updatedAt: this.clock() };
     this.renderer.render(this.state);
     return this.state;
   }
