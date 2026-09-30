@@ -2,8 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import { createMemoryService } from "./service";
 import type { MemoryRepository } from "./repository";
 import type { MemoryRecord } from "./ranking";
+import type { MemoryObservability } from "./observability";
 
 describe("MemoryService", () => {
+  function observabilityStub(): {
+    observability: MemoryObservability;
+    increment: ReturnType<typeof vi.fn>;
+    observe: ReturnType<typeof vi.fn>;
+  } {
+    const increment = vi.fn();
+    const observe = vi.fn();
+    return { observability: { increment, observe }, increment, observe };
+  }
+
   it("overfetches candidates, ranks them, limits results, and marks selected memories accessed", async () => {
     const records: MemoryRecord[] = [
       {
@@ -26,7 +37,8 @@ describe("MemoryService", () => {
       findCandidates: vi.fn(async () => records),
       markAccessed: vi.fn(async () => {}),
     };
-    const service = createMemoryService(repository);
+    const { observability, increment, observe } = observabilityStub();
+    const service = createMemoryService(repository, undefined, undefined, observability);
 
     const result = await service.recall({
       userId: "u1", companionId: "c1", query: "project", limit: 1,
@@ -40,6 +52,14 @@ describe("MemoryService", () => {
     );
     expect(repository.markAccessed).toHaveBeenCalledWith(
       ["m1"], "2026-09-30T00:00:00Z",
+    );
+    expect(increment).toHaveBeenCalledWith("memory_recall_success", 1, { result: "hit" });
+    expect(observe).toHaveBeenCalledWith("memory_recall_candidate_count", 2);
+    expect(observe).toHaveBeenCalledWith("memory_recall_result_count", 1);
+    expect(observe).toHaveBeenCalledWith(
+      "memory_recall_duration_ms",
+      expect.any(Number),
+      { result: "hit" },
     );
   });
 
@@ -235,4 +255,19 @@ describe("MemoryService", () => {
     );
   });
 
+  it("records write failures without masking the original error", async () => {
+    const repository: MemoryRepository = {
+      create: vi.fn(async () => { throw new Error("write failed"); }),
+      replace: vi.fn(), remove: vi.fn(), findCandidates: vi.fn(async () => []), markAccessed: vi.fn(),
+    };
+    const { observability, increment, observe } = observabilityStub();
+    const service = createMemoryService(repository, undefined, undefined, observability);
+
+    await expect(service.remember({
+      userId: "u1", companionId: "c1", kind: "fact", content: "失败测试",
+    })).rejects.toThrow("write failed");
+
+    expect(increment).toHaveBeenCalledWith("memory_write_failure", 1, { operation: "remember" });
+    expect(observe).toHaveBeenCalledWith("memory_write_duration_ms", expect.any(Number), { operation: "remember" });
+  });
 });
