@@ -99,6 +99,8 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
   private readonly lipSyncTimeline = new LipSyncPlaybackTimeline();
   private playTail: Promise<void> = Promise.resolve();
   private playbackGeneration = 0;
+  private pendingSources = 0;
+  private idleWaiters = new Set<() => void>();
 
   constructor(private readonly sampleRate = 24_000) {}
 
@@ -130,7 +132,26 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
       const schedule = this.timeline.schedule(frame, this.context.currentTime);
       const sample = this.lipSyncAnalyzer.analyze(frame);
       if (sample) this.lipSyncTimeline.add(sample, schedule);
-      source.start(schedule.startTime);
+
+      this.pendingSources += 1;
+      let ended = false;
+      source.onended = () => {
+        if (ended) return;
+        ended = true;
+        this.pendingSources -= 1;
+        if (this.pendingSources === 0) {
+          for (const resolve of this.idleWaiters) resolve();
+          this.idleWaiters.clear();
+        }
+      };
+
+      try {
+        source.start(schedule.startTime);
+      } catch (error) {
+        source.onended = null;
+        this.pendingSources -= 1;
+        throw error;
+      }
     });
 
     this.playTail = operation.catch(() => {});
@@ -139,10 +160,15 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
 
   async waitForIdle(): Promise<void> {
     await this.playTail;
-    const context = this.context;
-    if (!context) return;
-    const remainingMs = Math.max(0, (this.timeline.getEndTime() - context.currentTime) * 1000);
-    if (remainingMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, remainingMs));
+    if (this.pendingSources === 0) return;
+
+    await new Promise<void>((resolve) => {
+      this.idleWaiters.add(resolve);
+      if (this.pendingSources === 0) {
+        this.idleWaiters.delete(resolve);
+        resolve();
+      }
+    });
   }
 
   getPlaybackTime(): number {
@@ -159,6 +185,9 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
     await this.playTail;
     await this.context?.close();
     this.context = undefined;
+    this.pendingSources = 0;
+    for (const resolve of this.idleWaiters) resolve();
+    this.idleWaiters.clear();
     this.timeline.reset();
     this.lipSyncTimeline.reset();
   }
