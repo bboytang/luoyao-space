@@ -19,6 +19,7 @@ export interface RememberCandidateInput extends MemoryWriteSignals {
   companionId: string;
   relationshipRelevance?: number;
   projectRelevance?: number;
+  projectId?: string;
   createdAt?: string;
 }
 
@@ -152,6 +153,7 @@ export function createMemoryService(
         importance: decision.importance,
         relationshipRelevance: input.relationshipRelevance ?? 0,
         projectRelevance: input.projectRelevance ?? 0,
+        ...(input.projectId ? { projectId: input.projectId } : {}),
         createdAt,
         ...(vector ? { embedding: vector } : {}),
       };

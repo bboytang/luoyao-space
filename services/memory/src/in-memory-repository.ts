@@ -19,6 +19,7 @@ export class InMemoryMemoryRepository implements MemoryRepository {
       importance: input.importance ?? 0.5,
       relationshipRelevance: input.relationshipRelevance ?? 0,
       projectRelevance: input.projectRelevance ?? 0,
+      ...(input.projectId ? { projectId: input.projectId } : {}),
       createdAt: input.createdAt ?? new Date().toISOString(),
     };
 
@@ -38,6 +39,7 @@ export class InMemoryMemoryRepository implements MemoryRepository {
       importance: input.update.importance ?? existing.importance,
       relationshipRelevance: input.update.relationshipRelevance ?? existing.relationshipRelevance,
       projectRelevance: input.update.projectRelevance ?? existing.projectRelevance,
+      ...(input.update.projectId ? { projectId: input.update.projectId } : existing.projectId ? { projectId: existing.projectId } : {}),
       createdAt: input.update.createdAt ?? new Date().toISOString(),
     };
     this.records.set(input.memoryId, record);
@@ -63,6 +65,13 @@ export class InMemoryMemoryRepository implements MemoryRepository {
             record.content.toLowerCase().includes(normalized)),
       )
       .slice(0, query.limit);
+  }
+
+  async findProjectMemories(input: { userId: string; companionId: string; projectId: string; limit: number }): Promise<MemoryRecord[]> {
+    return [...this.records.values()]
+      .filter((record) => record.userId === input.userId && record.companionId === input.companionId && record.projectId === input.projectId)
+      .sort((a, b) => b.importance - a.importance || b.createdAt.localeCompare(a.createdAt))
+      .slice(0, input.limit);
   }
 
   async markAccessed(memoryIds: readonly string[], accessedAt: string): Promise<void> {

@@ -20,6 +20,7 @@ export interface MemoryRecord {
   importance: number;
   relationshipRelevance: number;
   projectRelevance: number;
+  projectId?: string;
   createdAt: string;
   lastAccessedAt?: string;
   embeddingScore?: number;

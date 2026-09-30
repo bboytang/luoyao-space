@@ -8,6 +8,7 @@ export interface CreateMemoryInput {
   importance?: number;
   relationshipRelevance?: number;
   projectRelevance?: number;
+  projectId?: string;
   createdAt?: string;
   embedding?: readonly number[];
 }
@@ -29,4 +30,5 @@ export interface MemoryRepository {
   remove(input: { userId: string; companionId: string; memoryId: string }): Promise<void>;
   findCandidates(query: MemoryCandidateQuery): Promise<MemoryRecord[]>;
   markAccessed(memoryIds: readonly string[], accessedAt: string): Promise<void>;
+  findProjectMemories?(input: { userId: string; companionId: string; projectId: string; limit: number }): Promise<MemoryRecord[]>;
 }
