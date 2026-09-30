@@ -17,6 +17,7 @@ export interface ExecuteDurableTaskInput {
   permission: ExecuteTaskStepInput["permission"];
   backend: ExecuteTaskStepInput["backend"];
   invocationId?: (task: AgentTask) => string;
+  leaseDurationMs?: number;
   now?: string;
 }
 
@@ -42,107 +43,92 @@ export async function executeDurableTaskStep(
   if (task.deviceId !== input.device.deviceId) {
     throw new Error("Task target device does not match execution device");
   }
-  if (task.currentStep >= task.plan.length) {
-    throw new Error("Task has no remaining steps");
-  }
+  if (task.currentStep >= task.plan.length) throw new Error("Task has no remaining steps");
 
-  const step = task.plan[task.currentStep];
+  const now = input.now ?? new Date().toISOString();
+  const leaseDurationMs = input.leaseDurationMs ?? 60_000;
+  if (!Number.isFinite(leaseDurationMs) || leaseDurationMs <= 0) {
+    throw new Error("Task lease duration must be positive");
+  }
+  const leaseId = crypto.randomUUID();
+  const leaseExpiresAt = new Date(Date.parse(now) + leaseDurationMs).toISOString();
+
+  const claimed = await input.repository.claimStep({
+    task, leaseId, leaseExpiresAt, now,
+  });
+
+  const step = claimed.plan[claimed.currentStep];
   const capability = input.resolveCapability(step.capabilityId);
 
   if (!capability) {
-    const failed = failTask(task, "capability_not_found:" + step.capabilityId, input.now);
-    const persisted = await input.lifecycle.persistTransition({
-      previous: task,
-      next: failed,
-      eventType: "task.failed",
-      actor: "agent",
-      source: "durable-task-runner",
-      capabilityId: step.capabilityId,
-      reason: "capability_not_found",
-      occurredAt: input.now,
-    });
-    return { task: persisted };
+    const failed = failTask(claimed, "capability_not_found:" + step.capabilityId, now);
+    return {
+      task: await input.lifecycle.persistTransition({
+        previous: claimed, next: failed, eventType: "task.failed", actor: "agent",
+        source: "durable-task-runner", capabilityId: step.capabilityId,
+        reason: "capability_not_found", occurredAt: now,
+      }),
+    };
   }
 
   const result = await executeTaskStep({
-    task,
-    capability,
-    device: input.device,
-    permission: input.permission,
-    backend: input.backend,
-    invocationId: input.invocationId?.(task),
+    task: claimed, capability, device: input.device, permission: input.permission,
+    backend: input.backend, invocationId: input.invocationId?.(claimed),
   });
 
   if (!result.ok) {
     if (result.error?.code === "USER_INPUT_REQUIRED") {
-      const waiting = requestUserInput(task, input.now);
-      const persisted = await input.lifecycle.persistTransition({
-        previous: task,
-        next: waiting,
-        eventType: "task.waiting_user",
-        actor: "agent",
-        source: "durable-task-runner",
-        capabilityId: step.capabilityId,
-        reason: result.error.message,
-        errorCode: result.error.code,
-        occurredAt: input.now,
-      });
-      return { task: persisted, stepResult: result };
+      const waiting = requestUserInput(claimed, now);
+      return {
+        task: await input.lifecycle.persistTransition({
+          previous: claimed, next: waiting, eventType: "task.waiting_user", actor: "agent",
+          source: "durable-task-runner", capabilityId: step.capabilityId,
+          reason: result.error.message, errorCode: result.error.code, occurredAt: now,
+        }),
+        stepResult: result,
+      };
     }
 
-    const failed = failTask(
-      task,
-      result.error?.message ?? "task_step_execution_failed",
-      input.now,
-    );
-    const persisted = await input.lifecycle.persistTransition({
-      previous: task,
-      next: failed,
-      eventType: "task.failed",
-      actor: "agent",
-      source: "durable-task-runner",
-      capabilityId: step.capabilityId,
-      reason: result.error?.message,
-      errorCode: result.error?.code,
-      occurredAt: input.now,
-    });
-    return { task: persisted, stepResult: result };
+    const failed = failTask(claimed, result.error?.message ?? "task_step_execution_failed", now);
+    return {
+      task: await input.lifecycle.persistTransition({
+        previous: claimed, next: failed, eventType: "task.failed", actor: "agent",
+        source: "durable-task-runner", capabilityId: step.capabilityId,
+        reason: result.error?.message, errorCode: result.error?.code, occurredAt: now,
+      }),
+      stepResult: result,
+    };
   }
 
-  const nextStep = task.currentStep + 1;
-  const completed = nextStep >= task.plan.length;
+  const nextStep = claimed.currentStep + 1;
+  const completed = nextStep >= claimed.plan.length;
   const next: AgentTask = {
-    ...task,
+    ...claimed,
     currentStep: nextStep,
     status: completed ? "COMPLETED" : "RUNNING",
-    version: task.version + 1,
-    result: appendStepOutput(task.result, result.output),
-    updatedAt: input.now ?? new Date().toISOString(),
+    version: claimed.version + 1,
+    executionLeaseId: undefined,
+    executionLeaseExpiresAt: undefined,
+    result: appendStepOutput(claimed.result, result.output),
+    updatedAt: now,
   };
 
-  const persisted = await input.lifecycle.persistTransition({
-    previous: task,
-    next,
-    eventType: completed ? "task.completed" : "task.progress",
-    actor: "agent",
-    source: "durable-task-runner",
-    capabilityId: step.capabilityId,
-    occurredAt: input.now,
-  });
-
-  return { task: persisted, stepResult: result };
+  return {
+    task: await input.lifecycle.persistTransition({
+      previous: claimed, next, eventType: completed ? "task.completed" : "task.progress",
+      actor: "agent", source: "durable-task-runner", capabilityId: step.capabilityId, occurredAt: now,
+    }),
+    stepResult: result,
+  };
 }
 
 function appendStepOutput(existing: unknown, output: unknown): unknown[] {
   return [...(Array.isArray(existing) ? existing : []), output];
 }
 
-function failTask(task: AgentTask, error: string, now?: string): AgentTask {
+function failTask(task: AgentTask, error: string, now: string): AgentTask {
   return {
-    ...task,
-    status: "FAILED",
-    error,
-    version: task.version + 1,
-    updatedAt: now ?? new Date().toISOString(),
+    ...task, status: "FAILED", error, version: task.version + 1,
+    executionLeaseId: undefined, executionLeaseExpiresAt: undefined, updatedAt: now,
   };
 }
