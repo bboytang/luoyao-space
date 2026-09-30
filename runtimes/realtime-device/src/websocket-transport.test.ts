@@ -51,7 +51,7 @@ class FakeSocket implements WebSocketLike {
 }
 
 const codec: TransportCodec = {
-  decodeControl: (data) => JSON.parse(data) as RealtimeControlMessage,
+  decodeControl: (data) => JSON.parse(data) as RealtimeServerMessage,
   encodeControl: (message) => JSON.stringify(message),
   decodeAudio: (data) => ({
     kind: "audio",
@@ -100,16 +100,17 @@ describe("WebSocketTransport", () => {
     transport.onMessage(onMessage);
     transport.onAudio(onAudio);
 
-    const hello: RealtimeControlMessage = {
-      type: "hello",
-      version: 1,
+    const ready: RealtimeServerMessage = {
+      type: "ready",
       sessionId: "session-1",
+      state: "ready",
+      serverTime: "2026-01-01T00:00:00.000Z",
     };
-    socket.receiveMessage(JSON.stringify({ type: "ready", sessionId: "session-1", state: "ready", serverTime: "2026-01-01T00:00:00.000Z" }));
+    socket.receiveMessage(JSON.stringify(ready));
     socket.receiveMessage(new Uint8Array([9, 10]));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(onMessage).toHaveBeenCalledWith(hello);
+    expect(onMessage).toHaveBeenCalledWith(ready);
     expect(onAudio).toHaveBeenCalledWith(
       expect.objectContaining({ sequence: 9, payload: new Uint8Array([9, 10]) }),
     );
