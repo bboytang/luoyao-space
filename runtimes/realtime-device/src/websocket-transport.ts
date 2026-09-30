@@ -1,7 +1,6 @@
 import type {
   AudioFrame,
   RealtimeControlMessage,
-  RealtimeServerMessage,
 } from "./protocol";
 import type {
   RealtimeTransport,
@@ -80,7 +79,7 @@ export class WebSocketTransport implements RealtimeTransport {
     }
   }
 
-  async send(message: RealtimeServerMessage): Promise<void> {
+  async send(message: RealtimeControlMessage): Promise<void> {
     this.socket.send(this.codec.encodeControl(message));
   }
 
