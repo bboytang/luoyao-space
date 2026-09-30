@@ -70,6 +70,36 @@ describe("TaskLifecycleService", () => {
     expect(events.events[1]?.data.taskVersion).toBe(2);
   });
 
+  it("rejects illegal state transitions", async () => {
+    const service = new TaskLifecycleService(
+      new InMemoryTaskRepository(),
+      new InMemoryTaskEventPublisher(),
+    );
+
+    await expect(service.persistTransition({
+      previous: { ...task, status: "COMPLETED" },
+      next: { ...task, status: "RUNNING", version: 2 },
+      eventType: "task.progress",
+      actor: "system",
+      source: "test",
+    })).rejects.toThrow("Invalid task transition: COMPLETED -> RUNNING");
+  });
+
+  it("rejects the approval-only transition without approval", async () => {
+    const service = new TaskLifecycleService(
+      new InMemoryTaskRepository(),
+      new InMemoryTaskEventPublisher(),
+    );
+
+    await expect(service.persistTransition({
+      previous: { ...task, status: "WAITING_APPROVAL" },
+      next: { ...task, status: "RUNNING", version: 2 },
+      eventType: "task.started",
+      actor: "agent",
+      source: "test",
+    })).rejects.toThrow("Approval transition requires an approved task");
+  });
+
   it("rejects transitions that skip a version", async () => {
     const service = new TaskLifecycleService(
       new InMemoryTaskRepository(),
