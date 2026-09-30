@@ -1,3 +1,5 @@
+import type { AvatarEmotionEventData } from "./avatar";
+
 export type EventType =
   | "conversation.created"
   | "conversation.updated"
@@ -62,3 +64,6 @@ export interface TaskAuditEventData {
   reason?: string;
   errorCode?: string;
 }
+
+
+export type AvatarEmotionEvent = DomainEvent<AvatarEmotionEventData>;
