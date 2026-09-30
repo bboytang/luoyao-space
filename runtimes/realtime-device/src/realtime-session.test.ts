@@ -196,6 +196,50 @@ describe("RealtimeSession", () => {
     expect(input.stop).toHaveBeenCalledTimes(1);
   });
 
+  it("waits for an in-flight listening start before aborting", async () => {
+    const { session, input, transport, output, avatar } = createSession();
+    let releaseStart!: () => void;
+    input.start.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { releaseStart = resolve; }),
+    );
+
+    const start = session.startListening();
+    const abort = session.abort();
+
+    expect(transport.send).not.toHaveBeenCalledWith({ type: "abort", reason: "user_cancel" });
+    expect(input.stop).not.toHaveBeenCalled();
+
+    releaseStart();
+    await Promise.all([start, abort]);
+
+    expect(transport.send).toHaveBeenNthCalledWith(1, { type: "listen", mode: "start" });
+    expect(transport.send).toHaveBeenNthCalledWith(2, { type: "abort", reason: "user_cancel" });
+    expect(input.stop).toHaveBeenCalledTimes(1);
+    expect(output.stop).toHaveBeenCalledTimes(1);
+    expect(avatar.handleClosed).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for an in-flight listening start before closing", async () => {
+    const { session, input, transport } = createSession();
+    let releaseStart!: () => void;
+    input.start.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { releaseStart = resolve; }),
+    );
+
+    const start = session.startListening();
+    const close = session.close();
+
+    expect(transport.close).toHaveBeenCalledTimes(1);
+    expect(input.stop).not.toHaveBeenCalled();
+
+    releaseStart();
+    await Promise.allSettled([start, close]);
+
+    expect(input.stop).toHaveBeenCalledTimes(1);
+    expect(transport.close).toHaveBeenCalledTimes(1);
+    await expect(session.connect()).rejects.toThrow("RealtimeSession is closed");
+  });
+
   it("keeps lifecycle operations terminal and idempotent", async () => {
     const { session, transport, input, output } = createSession();
 
