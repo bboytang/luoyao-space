@@ -5,70 +5,27 @@ import type {
 } from "./protocol";
 import { TransportProtocolError, type TransportCodec } from "./transport";
 
-const CONTROL_TYPES = new Set(["hello", "listen", "abort", "ping"]);
+const SERVER_TYPES = new Set(["ready", "stt", "tts", "error", "pong"]);
 
 export const jsonCodec: TransportCodec = {
-  decodeControl(data: string): RealtimeControlMessage {
+  decodeControl(data: string): RealtimeServerMessage {
     let value: unknown;
-
     try {
       value = JSON.parse(data);
     } catch {
       throw new TransportProtocolError("Invalid JSON control message");
     }
-
     if (!value || typeof value !== "object") {
-      throw new TransportProtocolError("Control message must be an object");
+      throw new TransportProtocolError("Server message must be an object");
     }
-
     const message = value as Record<string, unknown>;
-
-    if (typeof message.type !== "string" || !CONTROL_TYPES.has(message.type)) {
-      throw new TransportProtocolError("Unsupported control message type");
+    if (typeof message.type !== "string" || !SERVER_TYPES.has(message.type)) {
+      throw new TransportProtocolError("Unsupported server message type");
     }
-
-    if (message.type === "hello") {
-      if (
-        message.version !== 1 ||
-        typeof message.sessionId !== "string" ||
-        message.sessionId.trim().length === 0 ||
-        (message.deviceId !== undefined &&
-          (typeof message.deviceId !== "string" || message.deviceId.trim().length === 0)) ||
-        (message.capabilities !== undefined &&
-          (!Array.isArray(message.capabilities) ||
-            message.capabilities.some((capability) => typeof capability !== "string"))) 
-      ) {
-        throw new TransportProtocolError("Invalid hello message");
-      }
-    }
-
-    if (message.type === "listen") {
-      if (message.mode !== "start" && message.mode !== "stop") {
-        throw new TransportProtocolError("Invalid listen mode");
-      }
-    }
-
-    if (message.type === "abort") {
-      const reasons = new Set([
-        "barge_in",
-        "user_cancel",
-        "session_shutdown",
-        "system",
-      ]);
-
-      if (typeof message.reason !== "string" || !reasons.has(message.reason)) {
-        throw new TransportProtocolError("Invalid abort reason");
-      }
-    }
-
-    if (message.type === "ping" && typeof message.timestamp !== "string") {
-      throw new TransportProtocolError("Invalid ping timestamp");
-    }
-
-    return message as unknown as RealtimeControlMessage;
+    return message as unknown as RealtimeServerMessage;
   },
 
-  encodeControl(message: RealtimeServerMessage): string {
+  encodeControl(message: RealtimeControlMessage): string {
     return JSON.stringify(message);
   },
 
