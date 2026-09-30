@@ -66,9 +66,29 @@ export function createMemoryService(
     if (events) await events.emit(event);
   }
 
+  async function resolveEmbedding(
+    text: string,
+    existing?: readonly number[],
+  ): Promise<readonly number[] | undefined> {
+    if (existing) {
+      validateEmbedding(existing);
+      return existing;
+    }
+    if (!embedding) return undefined;
+
+    const result = await embedding.embed({ text });
+    validateEmbedding(result.vector);
+    return result.vector;
+  }
+
   return {
     async remember(input) {
-      const memory = await repository.create(input);
+      const vector = await resolveEmbedding(input.content, input.embedding);
+      const persistedInput: CreateMemoryInput = {
+        ...input,
+        ...(vector ? { embedding: vector } : {}),
+      };
+      const memory = await repository.create(persistedInput);
       await emit({
         type: "memory.created",
         userId: memory.userId,
@@ -85,11 +105,7 @@ export function createMemoryService(
       }
 
       const createdAt = input.createdAt ?? nowIso();
-      const vector = embedding
-        ? (await embedding.embed({ text: input.userMessage })).vector
-        : undefined;
-
-      if (vector) validateEmbedding(vector);
+      const vector = await resolveEmbedding(input.userMessage);
 
       const candidates = await repository.findCandidates({
         userId: input.userId,
@@ -158,7 +174,15 @@ export function createMemoryService(
     },
 
     async replace(input) {
-      const memory = await repository.replace(input);
+      const vector = await resolveEmbedding(input.update.content, input.update.embedding);
+      const persistedUpdate: CreateMemoryInput = {
+        ...input.update,
+        ...(vector ? { embedding: vector } : {}),
+      };
+      const memory = await repository.replace({
+        ...input,
+        update: persistedUpdate,
+      });
       await emit({
         type: "memory.updated",
         userId: memory.userId,
