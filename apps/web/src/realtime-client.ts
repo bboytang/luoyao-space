@@ -96,7 +96,8 @@ export class RealtimeClient {
     this.removeMessage = this.transport.onMessage((message) => {
       this.avatarController.handleServerMessage(message);
       if (message.type === "tts" && message.state === "stop") {
-        void this.output.waitForIdle?.().then(() => this.avatarController.handlePlaybackIdle());
+        const epoch = this.avatarController.getPlaybackEpoch();
+        void this.output.waitForIdle?.().then(() => this.avatarController.handlePlaybackIdle(epoch));
       }
     });
     this.removeAudio = this.transport.onAudio((frame) => {
@@ -151,6 +152,8 @@ export class RealtimeClient {
   async abort(): Promise<void> {
     this.listening = false;
     await this.input.stop();
+    await this.output.stop();
+    this.avatarController.handleClosed();
     await this.transport.send({
       type: "abort",
       reason: "user_cancel",
