@@ -17,6 +17,10 @@ type AudioHandler = (frame: AudioFrame) => void | Promise<void>;
 type CloseHandler = (event: TransportCloseEvent) => void;
 
 export class MemoryRealtimeTransport implements RealtimeTransport {
+  async waitUntilReady(): Promise<void> {
+    this.assertOpen();
+  }
+
   readonly sentMessages: RealtimeControlMessage[] = [];
   readonly sentAudio: AudioFrame[] = [];
 
