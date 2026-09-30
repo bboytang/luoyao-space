@@ -80,10 +80,11 @@ export class InMemoryTaskRepository implements TaskRepository {
       throw new TaskConcurrencyError();
     }
 
-    const updated = cloneTask({
-      ...input.task,
-      version: current.version + 1,
-    });
+    if (input.task.version !== input.expectedVersion + 1) {
+      throw new Error("Task version must advance exactly once");
+    }
+
+    const updated = cloneTask(input.task);
     this.tasks.set(updated.taskId, updated);
     return cloneTask(updated);
   }
