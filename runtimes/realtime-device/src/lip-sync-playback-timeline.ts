@@ -33,7 +33,9 @@ export class LipSyncPlaybackTimeline {
       sequence: sample.sequence,
       startTime: schedule.startTime,
       endTime: schedule.startTime + cueDuration,
-      openness: Math.max(0, Math.min(1, sample.openness)),
+      openness: Number.isFinite(sample.openness)
+        ? Math.max(0, Math.min(1, sample.openness))
+        : 0,
     };
 
     this.cues.push(cue);
@@ -51,6 +53,23 @@ export class LipSyncPlaybackTimeline {
     }
 
     return 0;
+  }
+
+  /**
+   * Discards cues that have fully elapsed on a monotonic playback clock.
+   */
+  pruneBefore(timeSeconds: number): void {
+    if (!Number.isFinite(timeSeconds)) return;
+
+    let firstActiveIndex = 0;
+    while (
+      firstActiveIndex < this.cues.length &&
+      this.cues[firstActiveIndex].endTime <= timeSeconds
+    ) {
+      firstActiveIndex += 1;
+    }
+
+    if (firstActiveIndex > 0) this.cues.splice(0, firstActiveIndex);
   }
 
   getCues(): readonly LipSyncCue[] {
