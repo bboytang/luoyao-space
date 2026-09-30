@@ -44,6 +44,7 @@ export class RealtimeSession {
   private startListeningPromise?: Promise<void>;
   private stopListeningPromise?: Promise<void>;
   private inputStopPromise?: Promise<void>;
+  private inputStopCompleted = false;
   private state: RealtimeClientSessionState = "closed";
 
   constructor(options: RealtimeSessionOptions) {
@@ -127,6 +128,7 @@ export class RealtimeSession {
     }
 
     this.startListeningPromise = (async () => {
+      this.inputStopCompleted = false;
       await this.input.start((frame: AudioFrame) => void this.transport.sendAudio(frame));
       if (this.closed) {
         await this.stopInput();
@@ -249,6 +251,7 @@ export class RealtimeSession {
   }
 
   private async stopInput(): Promise<void> {
+    if (this.inputStopCompleted) return;
     if (this.inputStopPromise) {
       await this.inputStopPromise;
       return;
@@ -256,6 +259,7 @@ export class RealtimeSession {
 
     this.inputStopPromise = (async () => {
       await this.input.stop();
+      this.inputStopCompleted = true;
     })();
 
     try {
