@@ -121,6 +121,13 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
     source.start(schedule.startTime);
   }
 
+  async waitForIdle(): Promise<void> {
+    const context = this.context;
+    if (!context) return;
+    const remainingMs = Math.max(0, (this.timeline.getEndTime() - context.currentTime) * 1000);
+    if (remainingMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, remainingMs));
+  }
+
   async stop(): Promise<void> {
     await this.context?.close();
     this.context = undefined;
