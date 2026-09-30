@@ -49,41 +49,46 @@ export class BrowserPcmCapture implements RealtimeAudioInput {
       stream.getTracks().forEach((track) => track.stop());
       return;
     }
+
     this.stream = stream;
+    try {
+      const context = new AudioContext({ sampleRate: this.sampleRate });
+      this.context = context;
+      await context.resume();
+      if (generation !== this.lifecycleGeneration) {
+        await this.stopResources();
+        return;
+      }
 
-    const context = new AudioContext({ sampleRate: this.sampleRate });
-    this.context = context;
-    await context.resume();
-    if (generation !== this.lifecycleGeneration) {
+      this.onFrame = onFrame;
+      await context.audioWorklet.addModule(
+        new URL("./pcm-capture-worklet.ts", import.meta.url),
+      );
+      if (generation !== this.lifecycleGeneration) {
+        await this.stopResources();
+        return;
+      }
+
+      this.source = context.createMediaStreamSource(stream);
+      this.worklet = new AudioWorkletNode(context, "luoyao-pcm-capture", {
+        numberOfInputs: 1,
+        numberOfOutputs: 0,
+        channelCount: 1,
+        channelCountMode: "explicit",
+        channelInterpretation: "speakers",
+        processorOptions: { frameSamples: this.frameSamples },
+      });
+
+      this.worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+        this.handleFrame(event.data);
+      };
+
+      this.source.connect(this.worklet);
+      if (generation !== this.lifecycleGeneration) await this.stopResources();
+    } catch (error) {
       await this.stopResources();
-      return;
+      throw error;
     }
-
-    this.onFrame = onFrame;
-    await context.audioWorklet.addModule(
-      new URL("./pcm-capture-worklet.ts", import.meta.url),
-    );
-    if (generation !== this.lifecycleGeneration) {
-      await this.stopResources();
-      return;
-    }
-
-    this.source = context.createMediaStreamSource(stream);
-    this.worklet = new AudioWorkletNode(context, "luoyao-pcm-capture", {
-      numberOfInputs: 1,
-      numberOfOutputs: 0,
-      channelCount: 1,
-      channelCountMode: "explicit",
-      channelInterpretation: "speakers",
-      processorOptions: { frameSamples: this.frameSamples },
-    });
-
-    this.worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-      this.handleFrame(event.data);
-    };
-
-    this.source.connect(this.worklet);
-    if (generation !== this.lifecycleGeneration) await this.stopResources();
   }
 
   private async stopResources(): Promise<void> {
