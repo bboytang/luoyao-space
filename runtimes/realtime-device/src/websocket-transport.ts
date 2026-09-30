@@ -1,6 +1,7 @@
-import type { RealtimeServerMessage } from "./protocol";\nimport type {
+import type {
   AudioFrame,
   RealtimeControlMessage,
+  RealtimeServerMessage,
 } from "./protocol";
 import type {
   RealtimeTransport,
