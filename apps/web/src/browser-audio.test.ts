@@ -64,6 +64,64 @@ describe("browser audio adapters", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it("rolls back failed playback scheduling", async () => {
+    const starts: Array<ReturnType<typeof vi.fn>> = [];
+    const sources: Array<{ onended: (() => void) | null; start: ReturnType<typeof vi.fn> }> = [];
+
+    class FakeAudioContext {
+      currentTime = 10;
+      readonly destination = {};
+
+      async resume(): Promise<void> {}
+
+      createBuffer(): { copyToChannel(): void } {
+        return { copyToChannel: vi.fn() };
+      }
+
+      createBufferSource(): {
+        buffer: unknown;
+        onended: (() => void) | null;
+        connect(): void;
+        start: ReturnType<typeof vi.fn>;
+      } {
+        const start = vi.fn();
+        starts.push(start);
+        const source = {
+          buffer: undefined as unknown,
+          onended: null as (() => void) | null,
+          connect: vi.fn(),
+          start,
+        };
+        sources.push(source);
+        return source;
+      }
+
+      async close(): Promise<void> {}
+    }
+
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+
+    const playback = new BrowserPcmPlayback(8_000);
+    const frame = {
+      kind: "audio" as const,
+      codec: "pcm_s16le" as const,
+      sampleRate: 8_000,
+      channels: 1,
+      sequence: 0,
+      payload: new Uint8Array([0, 0]),
+    };
+
+    starts.push(vi.fn().mockImplementationOnce(() => {
+      throw new Error("start failed");
+    }));
+
+    await expect(playback.play(frame)).rejects.toThrow("start failed");
+    await playback.play({ ...frame, sequence: 1 });
+
+    expect(sources[1].start).toHaveBeenCalledWith(10);
+    expect(playback.getMouthOpenAt(10.01)).toBe(0);
+  });
+
   it("ignores stale playback end callbacks after stop", async () => {
     const sources: Array<{ onended: (() => void) | null; start: ReturnType<typeof vi.fn> }> = [];
 
