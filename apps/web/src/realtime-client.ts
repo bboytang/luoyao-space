@@ -83,6 +83,7 @@ export class RealtimeClient {
   private removeAudio?: () => void;
   private removeClose?: () => void;
   private listening = false;
+  private closed = false;
 
   constructor(options: RealtimeClientOptions) {
     this.socket = new BrowserWebSocket(options.url);
@@ -161,12 +162,19 @@ export class RealtimeClient {
   }
 
   async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
     this.listening = false;
-    await this.input.stop();
-    await this.output.stop();
+
     this.removeMessage?.();
     this.removeAudio?.();
     this.removeClose?.();
+    this.removeMessage = undefined;
+    this.removeAudio = undefined;
+    this.removeClose = undefined;
+
+    await this.input.stop();
+    await this.output.stop();
     await this.transport.close(1000, "client closed");
   }
 }
