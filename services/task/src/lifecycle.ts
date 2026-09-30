@@ -90,7 +90,7 @@ function assertTransition(previous: AgentTask, next: AgentTask): void {
     if (next.approvalStatus !== "APPROVED") {
       throw new Error("Approval transition requires an approved task");
     }
-    transitionAfterApproval(next);
+    transitionAfterApproval({ ...previous, approvalStatus: next.approvalStatus });
     return;
   }
   if (!canTransition(previous.status, next.status)) {
