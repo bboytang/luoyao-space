@@ -159,7 +159,8 @@ export class PostgresMemoryEventQueue implements MemoryEventQueue {
            updated_at=$5::timestamptz
        WHERE event_id=$1::uuid
          AND status='processing'
-         AND locked_by=$2`,
+         AND locked_by=$2
+       RETURNING event_id`,
       [
         input.eventId,
         input.workerId,
