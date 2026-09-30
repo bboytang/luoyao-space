@@ -29,6 +29,23 @@ export interface RealtimeProviderFactories {
   readonly tts: Record<string, (options?: ProviderOptions) => TtsProvider>;
 }
 
+export function validateRealtimeProviderConfig(
+  config: RealtimeProviderConfig,
+): void {
+  const selections: Array<[keyof RealtimeProviderConfig, ProviderSelection]> = [
+    ["vad", config.vad],
+    ["asr", config.asr],
+    ["llm", config.llm],
+    ["tts", config.tts],
+  ];
+
+  for (const [kind, selection] of selections) {
+    if (!selection || typeof selection.provider !== "string" || !selection.provider.trim()) {
+      throw new Error(`Invalid ${kind} provider configuration`);
+    }
+  }
+}
+
 function createProvider<T>(
   kind: keyof RealtimeProviderFactories,
   selection: ProviderSelection,
@@ -49,6 +66,8 @@ export function createRealtimePipeline(
   config: RealtimeProviderConfig,
   factories: RealtimeProviderFactories,
 ): AudioPipeline {
+  validateRealtimeProviderConfig(config);
+
   return {
     vad: createProvider<VadProvider>("vad", config.vad, factories),
     asr: createProvider<AsrProvider>("asr", config.asr, factories),
