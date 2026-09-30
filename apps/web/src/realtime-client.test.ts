@@ -256,6 +256,39 @@ describe("RealtimeClient", () => {
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
 
+  it("does not report connected if the socket closes during hello", async () => {
+    const states: string[] = [];
+    const socket = new FakeSocket();
+    const originalSend = socket.send.bind(socket);
+    socket.send = vi.fn((data) => {
+      originalSend(data);
+      socket.receiveClose(1000, "server closed", true);
+    });
+    const input = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const output = {
+      play: vi.fn().mockResolvedValue(undefined),
+      waitForIdle: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const avatar = new AvatarRuntime({ renderer: { render: vi.fn() } });
+    const client = new RealtimeClient({
+      url: "wss://example.test/realtime",
+      socket,
+      avatar,
+      input,
+      output,
+      onStateChange: (state) => states.push(state),
+    });
+
+    await expect(client.connect()).rejects.toThrow("RealtimeClient is closed");
+    expect(states).toEqual(["connecting", "closed"]);
+    expect(input.stop).toHaveBeenCalledTimes(1);
+    expect(output.stop).toHaveBeenCalledTimes(1);
+  });
+
   it("reports connection state transitions once", async () => {
     const states: string[] = [];
     const socket = new FakeSocket();
