@@ -28,6 +28,31 @@ export interface TaskExecutionResult {
   stepResults: CapabilityResult[];
 }
 
+export type ResumePersistedTaskInput = Omit<ExecuteTaskInput, "task"> & {
+  taskId: string;
+  userId: string;
+  companionId: string;
+};
+
+export async function resumePersistedTask(
+  input: ResumePersistedTaskInput,
+): Promise<TaskExecutionResult> {
+  const task = await input.repository.get({
+    taskId: input.taskId,
+    userId: input.userId,
+    companionId: input.companionId,
+  });
+
+  if (!task) {
+    throw new Error("Task not found");
+  }
+
+  return executeTask({
+    ...input,
+    task,
+  });
+}
+
 export async function executeTask(
   input: ExecuteTaskInput,
 ): Promise<TaskExecutionResult> {
