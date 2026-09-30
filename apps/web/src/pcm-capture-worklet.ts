@@ -1,33 +1,19 @@
-declare const AudioWorkletProcessor: {
-  prototype: AudioWorkletProcessor;
-  new (options?: AudioWorkletNodeOptions): AudioWorkletProcessor;
-};
-
-declare class AudioWorkletProcessor {
-  readonly port: MessagePort;
-  process(
-    inputs: Float32Array[][],
-    outputs: Float32Array[][],
-    parameters: Record<string, Float32Array>,
-  ): boolean;
-}
-
 declare function registerProcessor(
   name: string,
   processorCtor: typeof AudioWorkletProcessor,
 ): void;
 
-interface AudioWorkletProcessorOptions {
+type CaptureProcessorOptions = {
   processorOptions?: {
     frameSamples?: number;
   };
-}
+};
 
 class LuoyaoPcmCaptureProcessor extends AudioWorkletProcessor {
   private readonly frameSamples: number;
   private readonly pending: number[] = [];
 
-  constructor(options?: AudioWorkletProcessorOptions) {
+  constructor(options?: CaptureProcessorOptions) {
     super();
     this.frameSamples = options?.processorOptions?.frameSamples ?? 480;
   }
