@@ -51,7 +51,7 @@ describe("InMemoryTaskRepository", () => {
     await repository.create(task);
 
     const updated = await repository.update({
-      task: { ...task, status: "PAUSED", updatedAt: "2026-09-30T01:00:00.000Z" },
+      task: { ...task, status: "PAUSED", version: 2, updatedAt: "2026-09-30T01:00:00.000Z" },
       expectedVersion: 1,
     });
 
@@ -75,12 +75,12 @@ describe("InMemoryTaskRepository", () => {
     });
 
     await repository.update({
-      task: { ...first!, status: "PAUSED" },
+      task: { ...first!, status: "PAUSED", version: 2 },
       expectedVersion: first!.version,
     });
 
     await expect(repository.update({
-      task: { ...second!, status: "CANCELLED" },
+      task: { ...second!, status: "CANCELLED", version: 2 },
       expectedVersion: second!.version,
     })).rejects.toBeInstanceOf(TaskConcurrencyError);
   });
