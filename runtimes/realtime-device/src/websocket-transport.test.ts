@@ -8,6 +8,10 @@ import { WebSocketTransport, type WebSocketLike } from "./websocket-transport";
 import type { TransportCodec } from "./transport";
 
 class FakeSocket implements WebSocketLike {
+  waitForOpen(): Promise<void> {
+    return Promise.resolve();
+  }
+
   private readonly handlers = {
     message: [] as Array<(event: { data: string | Uint8Array }) => void>,
     close: [] as Array<
