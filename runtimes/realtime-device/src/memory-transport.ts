@@ -17,7 +17,7 @@ type AudioHandler = (frame: AudioFrame) => void | Promise<void>;
 type CloseHandler = (event: TransportCloseEvent) => void;
 
 export class MemoryRealtimeTransport implements RealtimeTransport {
-  readonly sentMessages: RealtimeServerMessage[] = [];
+  readonly sentMessages: RealtimeControlMessage[] = [];
   readonly sentAudio: AudioFrame[] = [];
 
   private readonly messageHandlers = new Set<MessageHandler>();
@@ -66,7 +66,7 @@ export class MemoryRealtimeTransport implements RealtimeTransport {
     return () => this.closeHandlers.delete(handler);
   }
 
-  async receiveMessage(message: RealtimeControlMessage): Promise<void> {
+  async receiveMessage(message: RealtimeServerMessage): Promise<void> {
     this.assertOpen();
 
     for (const handler of this.messageHandlers) {
