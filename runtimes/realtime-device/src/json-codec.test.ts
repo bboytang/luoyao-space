@@ -3,7 +3,7 @@ import { jsonCodec } from "./json-codec";
 import { TransportProtocolError } from "./transport";
 
 describe("jsonCodec", () => {
-  it("decodes a valid hello message", () => {
+  it("decodes a valid server message", () => {
     expect(
       jsonCodec.decodeControl(
         JSON.stringify({
@@ -35,15 +35,15 @@ describe("jsonCodec", () => {
     ).toThrow(TransportProtocolError);
   });
 
-  it("rejects invalid listen modes", () => {
+  it("rejects client-only control messages", () => {
     expect(() =>
       jsonCodec.decodeControl(
-        JSON.stringify({ type: "listen", mode: "pause" }),
+        JSON.stringify({ type: "listen", mode: "start" }),
       ),
     ).toThrow(TransportProtocolError);
   });
 
-  it("rejects invalid abort reasons", () => {
+  it("rejects unknown server messages", () => {
     expect(() =>
       jsonCodec.decodeControl(
         JSON.stringify({ type: "abort", reason: "unknown" }),
@@ -51,7 +51,7 @@ describe("jsonCodec", () => {
     ).toThrow(TransportProtocolError);
   });
 
-  it("round-trips a server message", () => {
+  it("round-trips a client control message", () => {
     const message = {
       type: "tts",
       state: "sentence_start",
