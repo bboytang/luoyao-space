@@ -85,6 +85,24 @@ describe("TaskLifecycleService", () => {
     })).rejects.toThrow("Invalid task transition: COMPLETED -> RUNNING");
   });
 
+  it("allows the approval-only transition after approval", async () => {
+    const service = new TaskLifecycleService(
+      new InMemoryTaskRepository(),
+      new InMemoryTaskEventPublisher(),
+    );
+
+    const previous = { ...task, status: "WAITING_APPROVAL" as const, approvalStatus: "PENDING" as const };
+    const next = { ...previous, status: "RUNNING" as const, approvalStatus: "APPROVED" as const, version: 2 };
+
+    await expect(service.persistTransition({
+      previous,
+      next,
+      eventType: "task.started",
+      actor: "agent",
+      source: "test",
+    })).resolves.toMatchObject({ status: "RUNNING", version: 2 });
+  });
+
   it("rejects the approval-only transition without approval", async () => {
     const service = new TaskLifecycleService(
       new InMemoryTaskRepository(),
