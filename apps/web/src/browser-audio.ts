@@ -36,10 +36,11 @@ export class BrowserPcmCapture implements RealtimeAudioInput {
 
     const generation = this.lifecycleGeneration;
     const operation = this.startInternal(onFrame, generation);
-    this.startPromise = operation.finally(() => {
-      if (this.startPromise === operation) this.startPromise = undefined;
+    const trackedPromise = operation.finally(() => {
+      if (this.startPromise === trackedPromise) this.startPromise = undefined;
     });
-    return this.startPromise;
+    this.startPromise = trackedPromise;
+    return trackedPromise;
   }
 
   private async startInternal(onFrame: AudioFrameHandler, generation: number): Promise<void> {
