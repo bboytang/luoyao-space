@@ -110,7 +110,8 @@ describe("executeDurableTaskStep", () => {
 
     expect(result.task.currentStep).toBe(1);
     expect(result.task.status).toBe("RUNNING");
-    expect(result.task.version).toBe(2);
+    expect(result.task.version).toBe(3);
+    expect(result.task.executionLeaseId).toBeUndefined();
     expect(result.task.result).toEqual([{ capability: "filesystem.write" }]);
     expect(events.events.map((event) => event.type)).toEqual([
       "task.created",
@@ -152,7 +153,7 @@ describe("executeDurableTaskStep", () => {
 
     expect(resumed.task.currentStep).toBe(2);
     expect(resumed.task.status).toBe("COMPLETED");
-    expect(resumed.task.version).toBe(3);
+    expect(resumed.task.version).toBe(5);
     expect(resumed.task.result).toEqual([
       { capability: "filesystem.write" },
       { capability: "browser.open" },
@@ -181,6 +182,43 @@ describe("executeDurableTaskStep", () => {
 
     expect(result.task.status).toBe("WAITING_USER");
     expect(result.task.currentStep).toBe(0);
+    expect(result.task.version).toBe(3);
+    expect(result.task.executionLeaseId).toBeUndefined();
     expect(events.events.at(-1)?.type).toBe("task.waiting_user");
   });
 });
+
+
+  it("does not execute the same step concurrently", async () => {
+    const { repository, lifecycle } = setup();
+    await lifecycle.create(task);
+    let calls = 0;
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+
+    const first = executeDurableTaskStep({
+      taskId: "task-1", userId: "user-1", companionId: "luoyao",
+      device, repository, lifecycle, resolveCapability, permission,
+      backend: {
+        execute: async () => {
+          calls += 1;
+          await blocked;
+          return { ok: true };
+        },
+      },
+      now: "2026-09-30T01:00:00.000Z",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await expect(executeDurableTaskStep({
+      taskId: "task-1", userId: "user-1", companionId: "luoyao",
+      device, repository, lifecycle, resolveCapability, permission,
+      backend: { execute: async () => ({ ok: true }) },
+      now: "2026-09-30T01:00:01.000Z",
+    })).rejects.toMatchObject({ code: "TASK_CONCURRENCY_CONFLICT" });
+
+    expect(calls).toBe(1);
+    release();
+    await first;
+  });
