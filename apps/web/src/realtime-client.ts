@@ -85,158 +85,49 @@ function createSessionId(): string {
 }
 
 export class RealtimeClient {
-  private readonly socket: RealtimeClientSocket;
-  private readonly transport: WebSocketTransport;
-  private readonly avatarController: RealtimeAvatarController;
-  private readonly input: RealtimeAudioInput;
-  private readonly output: RealtimeAudioOutput;
-  private removeMessage?: () => void;
-  private removeAudio?: () => void;
-  private removeClose?: () => void;
-  private listening = false;
-  private closed = false;
-  private closePromise?: Promise<void>;
-  private readonly onStateChange?: (state: RealtimeClientState) => void;
-  private state: RealtimeClientState = "closed";
-
-  private setState(state: RealtimeClientState): void {
-    if (this.state === state) return;
-    this.state = state;
-    this.onStateChange?.(state);
-  }
+  private readonly session: RealtimeSession;
+  readonly sessionId: string;
+  readonly deviceId?: string;
 
   constructor(options: RealtimeClientOptions) {
-    this.socket = options.socket ?? new BrowserWebSocket(options.url);
-    this.transport = new WebSocketTransport(this.socket, binaryAudioCodec);
-    this.input = options.input;
-    this.output = options.output;
-    this.avatarController = new RealtimeAvatarController({
+    const socket = options.socket ?? new BrowserWebSocket(options.url);
+    const transport = new WebSocketTransport(socket, binaryAudioCodec);
+    const avatarController = new RealtimeAvatarController({
       avatar: options.avatar,
-    });
-    this.onStateChange = options.onStateChange;
-
-    this.removeMessage = this.transport.onMessage((message) => {
-      this.avatarController.handleServerMessage(message);
-      if (message.type === "tts" && message.state === "stop") {
-        const epoch = this.avatarController.getPlaybackEpoch();
-        void this.output.waitForIdle?.()
-          .then(() => this.avatarController.handlePlaybackIdle(epoch))
-          .catch(() => {});
-      }
-    });
-    this.removeAudio = this.transport.onAudio((frame) => {
-      this.avatarController.handleAudioFrame();
-      void this.output.play(frame).catch(() => {});
-    });
-    this.removeClose = this.transport.onClose(() => {
-      if (this.closed) return;
-      this.closed = true;
-      this.listening = false;
-      this.setState("closed");
-      this.removeMessage?.();
-      this.removeAudio?.();
-      this.removeClose?.();
-      this.removeMessage = undefined;
-      this.removeAudio = undefined;
-      this.removeClose = undefined;
-      this.avatarController.handleClosed();
-      void this.input.stop().catch(() => {});
-      void this.output.stop().catch(() => {});
     });
 
     this.sessionId = options.sessionId ?? createSessionId();
     this.deviceId = options.deviceId;
-  }
 
-  readonly sessionId: string;
-  readonly deviceId?: string;
-
-  async connect(): Promise<void> {
-    if (this.closed) throw new Error("RealtimeClient is closed");
-    this.setState("connecting");
-    await this.socket.waitForOpen();
-    if (this.closed) throw new Error("RealtimeClient is closed");
-    await this.transport.send({
-      type: "hello",
-      version: 1,
+    this.session = new RealtimeSession({
+      transport,
+      input: options.input,
+      output: options.output,
+      avatar: avatarController,
       sessionId: this.sessionId,
       deviceId: this.deviceId,
       capabilities: ["audio.pcm_s16le", "avatar.dynamic"],
+      onStateChange: options.onStateChange,
     });
-    if (this.closed) throw new Error("RealtimeClient is closed");
-    this.setState("connected");
+  }
+
+  async connect(): Promise<void> {
+    await this.session.connect();
   }
 
   async startListening(): Promise<void> {
-    if (this.closed) throw new Error("RealtimeClient is closed");
-    if (this.listening) return;
-    await this.input.start((frame: AudioFrame) => void this.transport.sendAudio(frame));
-    if (this.closed) {
-      await this.input.stop();
-      return;
-    }
-    await this.transport.send({
-      type: "listen",
-      mode: "start",
-    });
-    if (this.closed) {
-      await this.input.stop();
-      return;
-    }
-    this.listening = true;
+    await this.session.startListening();
   }
 
   async stopListening(): Promise<void> {
-    if (this.closed) return;
-    if (!this.listening) return;
-    this.listening = false;
-    if (this.closed) {
-      await this.input.stop();
-      return;
-    }
-    await this.transport.send({
-      type: "listen",
-      mode: "stop",
-    });
-    await this.input.stop();
+    await this.session.stopListening();
   }
 
   async abort(): Promise<void> {
-    if (this.closed) return;
-    this.listening = false;
-    await this.input.stop();
-    await this.output.stop();
-    this.avatarController.handleClosed();
-    if (this.closed) return;
-    await this.transport.send({
-      type: "abort",
-      reason: "user_cancel",
-    });
+    await this.session.abort();
   }
 
   async close(): Promise<void> {
-    if (this.closePromise) {
-      await this.closePromise;
-      return;
-    }
-
-    this.closed = true;
-    this.listening = false;
-    this.setState("closed");
-
-    this.removeMessage?.();
-    this.removeAudio?.();
-    this.removeClose?.();
-    this.removeMessage = undefined;
-    this.removeAudio = undefined;
-    this.removeClose = undefined;
-
-    this.closePromise = (async () => {
-      await this.input.stop();
-      await this.output.stop();
-      await this.transport.close(1000, "client closed");
-    })();
-
-    await this.closePromise;
+    await this.session.close();
   }
 }
