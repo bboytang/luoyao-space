@@ -58,10 +58,14 @@ export class RealtimeAvatarController {
     }
   }
 
-  handleClosed(): void {
+  handleAborted(): void {
     this.ttsEnded = true;
     this.playbackEpoch += 1;
     this.avatar.setSpeaking(false);
     this.avatar.setActivity("idle");
+  }
+
+  handleClosed(): void {
+    this.handleAborted();
   }
 }
