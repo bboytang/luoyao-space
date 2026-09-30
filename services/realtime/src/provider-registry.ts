@@ -5,6 +5,7 @@ import type {
   TtsProvider,
   VadProvider,
 } from "../../../runtimes/realtime-device/src/audio-pipeline";
+import { createDemoRealtimePipeline } from "./demo-pipeline";
 import { OpenAiLlmProvider } from "./providers/openai-llm";
 
 export interface ProviderOptions {
@@ -39,10 +40,13 @@ function requireStringOption(options: ProviderOptions | undefined, name: string)
 }
 
 export function createDefaultRealtimeProviderFactories(): RealtimeProviderFactories {
+  const demo = createDemoRealtimePipeline();
+
   return {
-    vad: {},
-    asr: {},
+    vad: { demo: () => demo.vad },
+    asr: { demo: () => demo.asr },
     llm: {
+      demo: () => demo.llm,
       openai: (options) =>
         new OpenAiLlmProvider({
           apiKey: requireStringOption(options, "apiKey"),
@@ -50,7 +54,7 @@ export function createDefaultRealtimeProviderFactories(): RealtimeProviderFactor
           baseUrl: typeof options?.baseUrl === "string" ? options.baseUrl : undefined,
         }),
     },
-    tts: {},
+    tts: { demo: () => demo.tts },
   };
 }
 
