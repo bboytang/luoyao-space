@@ -31,7 +31,7 @@ export class AvatarRuntime {
   constructor(options: AvatarRuntimeOptions) {
     this.renderer = options.renderer;
     this.clock = options.clock ?? Date.now;
-    this.state = { emotion: "calm", intensity: 0, expression: "neutral", activity: "idle", speaking: false, updatedAt: this.clock() };
+    this.state = { emotion: "calm", intensity: 0, expression: "neutral", activity: "idle", speaking: false, mouthOpen: 0, updatedAt: this.clock() };
     this.renderer.render(this.state);
   }
 
