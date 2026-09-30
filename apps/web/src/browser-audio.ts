@@ -9,17 +9,16 @@ export interface BrowserAudioOptions {
   frameSamples?: number;
 }
 
-/** Browser microphone adapter. It emits provider-neutral mono PCM16 frames. */
+/** Browser microphone adapter. Audio capture runs in an AudioWorklet and emits provider-neutral mono PCM16 frames. */
 export class BrowserPcmCapture implements RealtimeAudioInput {
   private readonly sampleRate: number;
   private readonly frameSamples: number;
   private stream?: MediaStream;
   private context?: AudioContext;
   private source?: MediaStreamAudioSourceNode;
-  private processor?: ScriptProcessorNode;
+  private worklet?: AudioWorkletNode;
   private sequence = 0;
-  private pending: number[] = [];
-  private onFrame?: (frame: AudioFrame) => void;
+  private onFrame?: AudioFrameHandler;
 
   constructor(options: BrowserAudioOptions = {}) {
     this.sampleRate = options.sampleRate ?? 24_000;
@@ -34,46 +33,57 @@ export class BrowserPcmCapture implements RealtimeAudioInput {
     await this.context.resume();
 
     this.onFrame = onFrame;
+    await this.context.audioWorklet.addModule(
+      new URL("./pcm-capture-worklet.ts", import.meta.url),
+    );
+
     this.source = this.context.createMediaStreamSource(this.stream);
-    this.processor = this.context.createScriptProcessor(this.frameSamples, 1, 1);
-    this.processor.onaudioprocess = (event) => this.handleInput(event.inputBuffer.getChannelData(0));
-    this.source.connect(this.processor);
-    this.processor.connect(this.context.destination);
+    this.worklet = new AudioWorkletNode(this.context, "luoyao-pcm-capture", {
+      numberOfInputs: 1,
+      numberOfOutputs: 0,
+      channelCount: 1,
+      channelCountMode: "explicit",
+      channelInterpretation: "speakers",
+      processorOptions: { frameSamples: this.frameSamples },
+    });
+
+    this.worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+      this.handleFrame(event.data);
+    };
+
+    this.source.connect(this.worklet);
   }
 
-  private handleInput(samples: Float32Array): void {
-    for (const sample of samples) this.pending.push(sample);
+  private handleFrame(buffer: ArrayBuffer): void {
+    const samples = new Float32Array(buffer);
+    const payload = new ArrayBuffer(samples.length * 2);
+    const view = new DataView(payload);
 
-    while (this.pending.length >= this.frameSamples) {
-      const chunk = this.pending.splice(0, this.frameSamples);
-      const payload = new ArrayBuffer(chunk.length * 2);
-      const view = new DataView(payload);
-      for (let i = 0; i < chunk.length; i += 1) {
-        const clamped = Math.max(-1, Math.min(1, chunk[i]));
-        view.setInt16(i * 2, clamped < 0 ? clamped * 32768 : clamped * 32767, true);
-      }
-
-      this.onFrame?.({
-        kind: "audio",
-        codec: "pcm_s16le",
-        sampleRate: this.sampleRate,
-        channels: 1,
-        sequence: this.sequence++,
-        payload: new Uint8Array(payload),
-      });
+    for (let i = 0; i < samples.length; i += 1) {
+      const clamped = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(i * 2, clamped < 0 ? clamped * 32768 : clamped * 32767, true);
     }
+
+    this.onFrame?.({
+      kind: "audio",
+      codec: "pcm_s16le",
+      sampleRate: this.sampleRate,
+      channels: 1,
+      sequence: this.sequence++,
+      payload: new Uint8Array(payload),
+    });
   }
 
   async stop(): Promise<void> {
-    this.processor?.disconnect();
+    this.worklet?.port.close();
+    this.worklet?.disconnect();
     this.source?.disconnect();
     this.stream?.getTracks().forEach((track) => track.stop());
     await this.context?.close();
-    this.processor = undefined;
+    this.worklet = undefined;
     this.source = undefined;
     this.stream = undefined;
     this.context = undefined;
-    this.pending = [];
     this.onFrame = undefined;
   }
 }
