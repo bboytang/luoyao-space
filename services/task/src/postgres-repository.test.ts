@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentTask } from "../../../packages/protocol/src/tasks";
 import { PostgresTaskRepository } from "./postgres-repository";
-import { TaskConcurrencyError } from "./repository";
+import { TaskConcurrencyError, TaskLeaseError } from "./repository";
 
 const task: AgentTask = {
   taskId: "task-1",
@@ -26,14 +26,38 @@ const task: AgentTask = {
   updatedAt: "2026-09-30T00:00:00.000Z",
 };
 
+function taskRow(overrides: Record<string, unknown> = {}) {
+  return {
+    task_id: "task-1",
+    user_id: "user-1",
+    companion_id: "luoyao",
+    goal: task.goal,
+    status: "RUNNING",
+    plan: task.plan,
+    current_step: 0,
+    requires_approval: false,
+    approval_status: null,
+    device_id: "desktop-1",
+    execution_context: null,
+    result: null,
+    error: null,
+    version: 1,
+    execution_lease_id: null,
+    execution_lease_expires_at: null,
+    created_at: task.createdAt,
+    updated_at: task.updatedAt,
+    ...overrides,
+  };
+}
+
 function fakeClient(rows: unknown[]) {
-  const calls: Array<{ text: string; values?: readonly unknown[] }> = [];
+  const calls: Array<{ text: string; values: readonly unknown[] }> = [];
   return {
     calls,
     client: {
       query: async <Row = unknown>(
         text: string,
-        values?: readonly unknown[],
+        values: readonly unknown[] = [],
       ) => {
         calls.push({ text, values });
         return { rows: rows as Row[] };
@@ -44,32 +68,13 @@ function fakeClient(rows: unknown[]) {
 
 describe("PostgresTaskRepository", () => {
   it("writes JSON task fields and version on create", async () => {
-    const { client, calls } = fakeClient([{
-      task_id: "task-1",
-      user_id: "user-1",
-      companion_id: "luoyao",
-      goal: task.goal,
-      status: "RUNNING",
-      plan: task.plan,
-      current_step: 0,
-      requires_approval: false,
-      approval_status: null,
-      device_id: "desktop-1",
-      execution_context: null,
-      result: null,
-      error: null,
-      version: 1,
-      created_at: task.createdAt,
-      execution_lease_id: null,
-      execution_lease_expires_at: null,
-      updated_at: task.updatedAt,
-    }]);
-
+    const { client, calls } = fakeClient([taskRow()]);
     const repository = new PostgresTaskRepository(client);
+
     const created = await repository.create(task);
 
     expect(created).toEqual(task);
-    expect(calls[0]?.text).toContain("INSERT INTO agent_tasks");
+    expect(calls[0]?.text).toContain("INSERT INTO tasks");
     expect(calls[0]?.values?.[5]).toBe(JSON.stringify(task.plan));
     expect(calls[0]?.values?.[13]).toBe(1);
   });
@@ -87,31 +92,13 @@ describe("PostgresTaskRepository", () => {
   });
 
   it("uses optimistic version matching on update", async () => {
-    const updated = { ...task, status: "PAUSED" as const, version: 2 };
-    const { client, calls } = fakeClient([{
-      task_id: "task-1",
-      user_id: "user-1",
-      companion_id: "luoyao",
-      goal: task.goal,
-      status: "PAUSED",
-      plan: task.plan,
-      current_step: 0,
-      requires_approval: false,
-      approval_status: null,
-      device_id: "desktop-1",
-      execution_context: null,
-      result: null,
-      error: null,
-      version: 2,
-      created_at: task.createdAt,
-      execution_lease_id: null,
-      execution_lease_expires_at: null,
-      updated_at: "2026-09-30T01:00:00.000Z",
-    }]);
-
+    const { client, calls } = fakeClient([
+      taskRow({ status: "PAUSED", version: 2, updated_at: "2026-09-30T01:00:00.000Z" }),
+    ]);
     const repository = new PostgresTaskRepository(client);
+
     const result = await repository.update({
-      task: updated,
+      task: { ...task, status: "PAUSED", version: 2 },
       expectedVersion: 1,
     });
 
@@ -129,23 +116,20 @@ describe("PostgresTaskRepository", () => {
       expectedVersion: 1,
     })).rejects.toBeInstanceOf(TaskConcurrencyError);
   });
-});
-
 
   it("claims a step atomically with a lease", async () => {
-    const { client, calls } = fakeClient([{
-      task_id: "task-1", user_id: "user-1", companion_id: "luoyao",
-      goal: task.goal, status: "RUNNING", plan: task.plan, current_step: 0,
-      requires_approval: false, approval_status: null, device_id: "desktop-1",
-      execution_context: null, result: null, error: null, version: 2,
-      execution_lease_id: "lease-1",
-      execution_lease_expires_at: "2026-09-30T00:01:00.000Z",
-      created_at: task.createdAt, updated_at: "2026-09-30T00:00:00.000Z",
-    }]);
-
+    const { client, calls } = fakeClient([
+      taskRow({
+        version: 2,
+        execution_lease_id: "lease-1",
+        execution_lease_expires_at: "2026-09-30T00:01:00.000Z",
+      }),
+    ]);
     const repository = new PostgresTaskRepository(client);
+
     const claimed = await repository.claimStep({
-      task, leaseId: "lease-1",
+      task,
+      leaseId: "lease-1",
       leaseExpiresAt: "2026-09-30T00:01:00.000Z",
       now: "2026-09-30T00:00:00.000Z",
     });
@@ -155,3 +139,16 @@ describe("PostgresTaskRepository", () => {
     expect(calls[0]?.text).toContain("execution_lease_id=$4");
     expect(calls[0]?.text).toContain("execution_lease_expires_at <= $6::timestamptz");
   });
+
+  it("distinguishes a non-running task from a lease conflict", async () => {
+    const { client } = fakeClient([taskRow({ status: "PAUSED" })]);
+    const repository = new PostgresTaskRepository(client);
+
+    await expect(repository.claimStep({
+      task: { ...task, status: "PAUSED" },
+      leaseId: "lease-1",
+      leaseExpiresAt: "2026-09-30T00:01:00.000Z",
+      now: "2026-09-30T00:00:00.000Z",
+    })).rejects.toBeInstanceOf(TaskLeaseError);
+  });
+});
