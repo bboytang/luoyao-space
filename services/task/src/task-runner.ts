@@ -6,6 +6,7 @@ import {
   executeTaskStep,
   type ExecuteTaskStepInput,
 } from "./task-executor";
+import { requestUserInput } from "./task-control";
 
 export interface ExecuteTaskInput {
   task: AgentTask;
@@ -67,6 +68,11 @@ export async function executeTask(
     stepResults.push(result);
 
     if (!result.ok) {
+      if (result.error?.code === "USER_INPUT_REQUIRED") {
+        task = requestUserInput(task, input.now);
+        return { task, stepResults };
+      }
+
       task = failTask(
         task,
         result.error?.message ?? "task_step_execution_failed",
