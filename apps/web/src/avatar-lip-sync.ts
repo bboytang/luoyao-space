@@ -1,5 +1,4 @@
 import { AvatarRuntime } from "../../../runtimes/avatar/src/runtime";
-import { LipSyncPlaybackTimeline } from "../../../runtimes/realtime-device/src/lip-sync-playback-timeline";
 
 /**
  * Browser-facing clock/source used to drive avatar mouth presentation from the
