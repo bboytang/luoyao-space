@@ -124,3 +124,28 @@ For meaningful changes, the implementation workflow is:
 4. run relevant tests
 5. inspect the latest GitHub Actions result
 6. only then mark the step complete
+
+
+## ADR-011 — Avatar is a presentation runtime driven by high-level expression events
+
+Luoyao's final product experience includes a persistent dynamic character, not only a text or audio interface.
+
+The avatar is therefore a runtime/presentation concern, not part of Brain, Memory or Relationship persistence.
+
+The ownership flow is:
+
+```
+Brain / Conversation Director
+  -> avatar.emotion
+  -> Realtime / Device Runtime
+  -> Avatar Runtime
+  -> expression, gaze, gesture and lip-sync
+```
+
+The `avatar.emotion` event carries provider-neutral high-level intent: emotion, normalized intensity, expression and optional transition duration.
+
+Brain must not depend on a specific avatar vendor, character asset, 2D/3D engine or rendering technology.
+
+Realtime audio remains authoritative for speaking state and lip-sync timing. Avatar rendering may use TTS/audio timing locally, but it must not become the owner of conversation, memory, relationship or task state.
+
+This allows the same Luoyao identity to appear as different avatar implementations on web, mobile, desktop or dedicated devices without changing the product brain.
