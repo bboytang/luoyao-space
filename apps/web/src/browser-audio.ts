@@ -22,6 +22,8 @@ export class BrowserPcmCapture implements RealtimeAudioInput {
   private worklet?: AudioWorkletNode;
   private sequence = 0;
   private onFrame?: AudioFrameHandler;
+  private startPromise?: Promise<void>;
+  private lifecycleGeneration = 0;
 
   constructor(options: BrowserAudioOptions = {}) {
     this.sampleRate = options.sampleRate ?? 24_000;
@@ -30,18 +32,43 @@ export class BrowserPcmCapture implements RealtimeAudioInput {
 
   async start(onFrame: AudioFrameHandler): Promise<void> {
     if (this.context) return;
+    if (this.startPromise) return this.startPromise;
 
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    this.context = new AudioContext({ sampleRate: this.sampleRate });
-    await this.context.resume();
+    const generation = this.lifecycleGeneration;
+    const operation = this.startInternal(onFrame, generation);
+    this.startPromise = operation.finally(() => {
+      if (this.startPromise === operation) this.startPromise = undefined;
+    });
+    return this.startPromise;
+  }
+
+  private async startInternal(onFrame: AudioFrameHandler, generation: number): Promise<void> {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (generation !== this.lifecycleGeneration) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    this.stream = stream;
+
+    const context = new AudioContext({ sampleRate: this.sampleRate });
+    this.context = context;
+    await context.resume();
+    if (generation !== this.lifecycleGeneration) {
+      await this.stopResources();
+      return;
+    }
 
     this.onFrame = onFrame;
-    await this.context.audioWorklet.addModule(
+    await context.audioWorklet.addModule(
       new URL("./pcm-capture-worklet.ts", import.meta.url),
     );
+    if (generation !== this.lifecycleGeneration) {
+      await this.stopResources();
+      return;
+    }
 
-    this.source = this.context.createMediaStreamSource(this.stream);
-    this.worklet = new AudioWorkletNode(this.context, "luoyao-pcm-capture", {
+    this.source = context.createMediaStreamSource(stream);
+    this.worklet = new AudioWorkletNode(context, "luoyao-pcm-capture", {
       numberOfInputs: 1,
       numberOfOutputs: 0,
       channelCount: 1,
@@ -55,6 +82,20 @@ export class BrowserPcmCapture implements RealtimeAudioInput {
     };
 
     this.source.connect(this.worklet);
+    if (generation !== this.lifecycleGeneration) await this.stopResources();
+  }
+
+  private async stopResources(): Promise<void> {
+    this.worklet?.port.close();
+    this.worklet?.disconnect();
+    this.source?.disconnect();
+    this.stream?.getTracks().forEach((track) => track.stop());
+    await this.context?.close();
+    this.worklet = undefined;
+    this.source = undefined;
+    this.stream = undefined;
+    this.context = undefined;
+    this.onFrame = undefined;
   }
 
   private handleFrame(buffer: ArrayBuffer): void {
@@ -78,16 +119,9 @@ export class BrowserPcmCapture implements RealtimeAudioInput {
   }
 
   async stop(): Promise<void> {
-    this.worklet?.port.close();
-    this.worklet?.disconnect();
-    this.source?.disconnect();
-    this.stream?.getTracks().forEach((track) => track.stop());
-    await this.context?.close();
-    this.worklet = undefined;
-    this.source = undefined;
-    this.stream = undefined;
-    this.context = undefined;
-    this.onFrame = undefined;
+    this.lifecycleGeneration += 1;
+    await this.startPromise;
+    await this.stopResources();
   }
 }
 
