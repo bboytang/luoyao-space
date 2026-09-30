@@ -30,7 +30,7 @@ export class RealtimeSession {
   private readonly output: RealtimeAudioOutput;
   private readonly avatar: RealtimeAvatarControllerPort;
   private readonly deviceId?: string;
-  private readonly capabilities?: string[];
+  private readonly capabilities: RealtimeCapability[];
   private readonly onStateChange?: (state: RealtimeSessionState) => void;
   private readonly sessionId: string;
   private removeMessage?: () => void;
