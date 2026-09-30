@@ -60,7 +60,7 @@
 - [x] automatic embedding generation on writes
 - [x] exact embedding-dimension enforcement
 - [x] stronger memory observability
-- [ ] memory lifecycle/retention policy
+- [x] memory lifecycle/retention policy
 - [ ] project memory aggregation
 
 ### Agent OS productionization
