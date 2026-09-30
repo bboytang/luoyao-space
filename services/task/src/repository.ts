@@ -102,7 +102,7 @@ export class InMemoryTaskRepository implements TaskRepository {
     if (current.version !== input.task.version) throw new TaskConcurrencyError();
     if (current.status !== "RUNNING") throw new TaskLeaseError("Task is not running");
     if (current.executionLeaseId && current.executionLeaseExpiresAt && current.executionLeaseExpiresAt > input.now) {
-      throw new TaskLeaseError();
+      throw new TaskConcurrencyError("Task execution lease is already held");
     }
 
     const claimed = cloneTask({
