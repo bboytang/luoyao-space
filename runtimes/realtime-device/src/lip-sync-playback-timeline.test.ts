@@ -45,11 +45,44 @@ describe("LipSyncPlaybackTimeline", () => {
     expect(timeline.sampleAt(1.05)).toBe(0);
   });
 
+  it("normalizes non-finite openness to a closed mouth", () => {
+    const timeline = new LipSyncPlaybackTimeline();
+
+    timeline.add(sample(1, Number.NaN, 0.1), schedule(1, 1.1));
+    expect(timeline.sampleAt(1.05)).toBe(0);
+
+    timeline.reset();
+    timeline.add(sample(2, Number.POSITIVE_INFINITY, 0.1), schedule(1, 1.1));
+    expect(timeline.sampleAt(1.05)).toBe(0);
+  });
+
+  it("prunes cues that have fully elapsed", () => {
+    const timeline = new LipSyncPlaybackTimeline();
+    timeline.add(sample(1, 0.5, 0.1), schedule(1, 1.1));
+    timeline.add(sample(2, 0.8, 0.1), schedule(1.1, 1.2));
+
+    timeline.pruneBefore(1.1);
+
+    expect(timeline.getCues()).toEqual([
+      { sequence: 2, startTime: 1.1, endTime: 1.2, openness: 0.8 },
+    ]);
+  });
+
+  it("ignores invalid prune times", () => {
+    const timeline = new LipSyncPlaybackTimeline();
+    timeline.add(sample(1, 0.5, 0.1), schedule(1, 1.1));
+
+    timeline.pruneBefore(Number.NaN);
+
+    expect(timeline.getCues()).toHaveLength(1);
+  });
+
   it("rejects invalid playback timing", () => {
     const timeline = new LipSyncPlaybackTimeline();
 
     expect(() => timeline.add(sample(1, 0.5, 0.1), schedule(2, 1))).toThrow();
     expect(() => timeline.add(sample(1, 0.5, -0.1), schedule(1, 2))).toThrow();
+    expect(() => timeline.add(sample(1, 0.5, 0.1), schedule(Number.NaN, 2))).toThrow();
   });
 
   it("resets all cues for a new response", () => {
