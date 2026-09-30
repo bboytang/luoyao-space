@@ -1,4 +1,15 @@
 import { describe, expect, it } from "vitest";
+import type { TaskPlanStep } from "../../../packages/protocol/src/tasks";
+
+const planStep: TaskPlanStep = {
+  id: "step-1",
+  capabilityId: "test.run",
+  description: "run",
+  risk: "L1",
+  requiredPermissions: [],
+  requiresApproval: false,
+  input: {},
+};
 import { canTransition, transition, transitionAfterApproval } from "./state-machine";
 
 describe("task state machine", () => {
@@ -20,7 +31,7 @@ describe("task state machine", () => {
       companionId: "companion-1",
       goal: "run an approved task",
       status: "WAITING_APPROVAL" as const,
-      plan: ["run"],
+      plan: [planStep],
       currentStep: 0,
       requiresApproval: true,
       approvalStatus: "APPROVED" as const,
