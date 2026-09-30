@@ -64,6 +64,78 @@ describe("browser audio adapters", () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores stale playback end callbacks after stop", async () => {
+    const sources: Array<{ onended: (() => void) | null; start: ReturnType<typeof vi.fn> }> = [];
+
+    class FakeAudioContext {
+      currentTime = 0;
+      readonly destination = {};
+
+      async resume(): Promise<void> {}
+
+      createBuffer(_channels: number, length: number, _sampleRate: number): {
+        copyToChannel(samples: Float32Array, channel: number): void;
+      } {
+        return {
+          copyToChannel: vi.fn((samples: Float32Array, channel: number) => {
+            expect(channel).toBe(0);
+            expect(samples.length).toBe(length);
+          }),
+        };
+      }
+
+      createBufferSource(): {
+        buffer: unknown;
+        onended: (() => void) | null;
+        connect(): void;
+        start: ReturnType<typeof vi.fn>;
+      } {
+        const source = {
+          buffer: undefined as unknown,
+          onended: null as (() => void) | null,
+          connect: vi.fn(),
+          start: vi.fn(),
+        };
+        sources.push(source);
+        return source;
+      }
+
+      async close(): Promise<void> {}
+    }
+
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+
+    const playback = new BrowserPcmPlayback(8_000);
+    const frame = {
+      kind: "audio" as const,
+      codec: "pcm_s16le" as const,
+      sampleRate: 8_000,
+      channels: 1,
+      sequence: 0,
+      payload: new Uint8Array([0, 0]),
+    };
+
+    await playback.play(frame);
+    const staleSource = sources[0];
+    await playback.stop();
+
+    await playback.play({ ...frame, sequence: 1 });
+    const currentSource = sources[1];
+    const idle = playback.waitForIdle();
+    let idleResolved = false;
+    void idle.then(() => {
+      idleResolved = true;
+    });
+
+    staleSource.onended?.();
+    await Promise.resolve();
+    expect(idleResolved).toBe(false);
+
+    currentSource.onended?.();
+    await idle;
+    expect(idleResolved).toBe(true);
+  });
+
   it("can start again after a completed capture stop", async () => {
     const tracks = [
       { stop: vi.fn() },
