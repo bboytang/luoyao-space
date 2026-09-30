@@ -15,6 +15,9 @@ export class DomAvatarRenderer implements AvatarRenderer {
   private readonly mouth: HTMLDivElement;
   private readonly status: HTMLDivElement;
   private readonly style: HTMLStyleElement;
+  private state: Readonly<AvatarState> | undefined;
+  private animationFrame: number | undefined;
+  private disposed = false;
 
   constructor(options: DomAvatarRendererOptions) {
     this.root = options.root;
@@ -34,10 +37,26 @@ export class DomAvatarRenderer implements AvatarRenderer {
     this.character.append(this.face, this.mouth, this.status);
     if (!this.root.querySelector("[data-luoyao-avatar-style]")) this.root.appendChild(this.style);
     this.root.appendChild(this.character);
+    this.startAnimation();
   }
 
   render(state: Readonly<AvatarState>): void {
-    const model = toAvatarRenderModel(state);
+    this.state = state;
+    this.renderFrame();
+  }
+
+  private startAnimation(): void {
+    const tick = () => {
+      if (this.disposed) return;
+      this.renderFrame();
+      this.animationFrame = requestAnimationFrame(tick);
+    };
+    this.animationFrame = requestAnimationFrame(tick);
+  }
+
+  private renderFrame(): void {
+    if (!this.state) return;
+    const model = toAvatarRenderModel(this.state);
     this.character.dataset.emotion = model.emotion;
     this.character.dataset.expression = model.expression;
     this.character.dataset.activity = model.activity;
@@ -56,6 +75,8 @@ export class DomAvatarRenderer implements AvatarRenderer {
   }
 
   dispose(): void {
+    this.disposed = true;
+    if (this.animationFrame !== undefined) cancelAnimationFrame(this.animationFrame);
     this.character.remove();
     if (this.style.parentElement === this.root && !this.root.querySelector("[data-avatar=\"luoyao\"]")) this.style.remove();
   }
