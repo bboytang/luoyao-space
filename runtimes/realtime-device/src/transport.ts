@@ -1,11 +1,10 @@
 import type {
   AudioFrame,
   RealtimeControlMessage,
-  RealtimeServerMessage,
 } from "./protocol";
 
 export interface RealtimeTransport {
-  send(message: RealtimeServerMessage): Promise<void>;
+  send(message: RealtimeControlMessage): Promise<void>;
   sendAudio(frame: AudioFrame): Promise<void>;
   close(code?: number, reason?: string): Promise<void>;
   onMessage(handler: (message: RealtimeControlMessage) => void | Promise<void>): () => void;
