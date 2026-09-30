@@ -117,7 +117,7 @@ describe("PostgresTaskRepository", () => {
 
     expect(result.version).toBe(2);
     expect(calls[0]?.values?.[17]).toBe(1);
-    expect(calls[0]?.text).toContain("AND version=$16");
+    expect(calls[0]?.text).toContain("AND version=$18");
   });
 
   it("turns a lost optimistic update into a concurrency error", async () => {
