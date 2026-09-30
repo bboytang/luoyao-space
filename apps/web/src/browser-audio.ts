@@ -133,7 +133,7 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
       source.start(schedule.startTime);
     });
 
-    this.playTail = operation.catch(() => undefined);
+    this.playTail = operation.catch(() => {});
     return operation;
   }
 
