@@ -12,6 +12,7 @@ export interface RealtimeAvatarStateController {
 export class RealtimeAvatarController {
   private ttsEnded = false;
   private playbackEpoch = 0;
+  private playbackActive = false;
 
   constructor(private readonly avatar: RealtimeAvatarStateController) {}
 
@@ -26,6 +27,7 @@ export class RealtimeAvatarController {
       case "tts":
         if (message.state === "start" || message.state === "sentence_start") {
           this.ttsEnded = false;
+          this.playbackActive = true;
           this.playbackEpoch += 1;
           this.avatar.setSpeaking(true);
         } else if (message.state === "stop") {
@@ -34,6 +36,7 @@ export class RealtimeAvatarController {
         break;
       case "error":
         this.ttsEnded = true;
+        this.playbackActive = false;
         this.playbackEpoch += 1;
         this.avatar.setSpeaking(false);
         this.avatar.setActivity("idle");
@@ -44,6 +47,7 @@ export class RealtimeAvatarController {
   }
 
   handleAudioFrame(): void {
+    if (!this.playbackActive) return;
     this.playbackEpoch += 1;
     this.avatar.setSpeaking(true);
   }
@@ -60,6 +64,7 @@ export class RealtimeAvatarController {
 
   handleAborted(): void {
     this.ttsEnded = true;
+    this.playbackActive = false;
     this.playbackEpoch += 1;
     this.avatar.setSpeaking(false);
     this.avatar.setActivity("idle");
