@@ -19,7 +19,7 @@ export class AvatarRealtimeBridge {
         if (output.frame) {
           this.avatar.setSpeaking(true);
           const sample = this.lipSync?.analyze(output.frame);
-          if (sample) this.avatar.setMouthOpen(sample.openness);
+          this.avatar.setMouthOpen(sample?.openness ?? 0);
         }
         break;
       case "completed":
