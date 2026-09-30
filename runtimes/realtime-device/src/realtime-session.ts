@@ -10,6 +10,7 @@ export interface RealtimeAvatarControllerPort {
   handleAudioFrame(): void;
   getPlaybackEpoch(): number;
   handlePlaybackIdle(epoch: number): void;
+  handleAborted(): void;
   handleClosed(): void;
 }
 
@@ -191,7 +192,7 @@ export class RealtimeSession {
       this.listening = false;
       await this.stopInput();
       await this.output.stop();
-      this.avatar.handleClosed();
+      this.avatar.handleAborted();
 
       if (this.closed) return;
       await this.transport.send({ type: "abort", reason: "user_cancel" });
