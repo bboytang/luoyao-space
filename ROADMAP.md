@@ -56,7 +56,7 @@
 
 ### Memory OS productionization
 
-- [ ] durable event consumer/queue
+- [x] durable event consumer/queue
 - [ ] automatic embedding generation on writes
 - [ ] exact embedding-dimension enforcement
 - [ ] stronger memory observability
