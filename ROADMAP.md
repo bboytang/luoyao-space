@@ -61,7 +61,7 @@
 - [x] exact embedding-dimension enforcement
 - [x] stronger memory observability
 - [x] memory lifecycle/retention policy
-- [ ] project memory aggregation
+- [x] project memory aggregation
 
 ### Agent OS productionization
 

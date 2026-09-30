@@ -149,3 +149,12 @@ Brain must not depend on a specific avatar vendor, character asset, 2D/3D engine
 Realtime audio remains authoritative for speaking state and lip-sync timing. Avatar rendering may use TTS/audio timing locally, but it must not become the owner of conversation, memory, relationship or task state.
 
 This allows the same Luoyao identity to appear as different avatar implementations on web, mobile, desktop or dedicated devices without changing the product brain.
+
+
+## ADR-012 — Project memory has an explicit optional scope
+
+Project memories may carry an explicit `projectId` in addition to the existing `projectRelevance` score.
+
+`projectId` is optional for backward compatibility with existing memories. When present, it scopes project aggregation and prevents memories from different projects from being mixed.
+
+Project aggregation is read-only at this layer: it retrieves a bounded, deterministic set of memories for one user, companion and project. Model-generated summaries are a later concern and must not be introduced into persistence without an explicit ownership and lifecycle design.
