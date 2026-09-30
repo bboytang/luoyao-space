@@ -1,6 +1,6 @@
 import type { RealtimeAudioInput, RealtimeAudioOutput } from "../../../runtimes/realtime-device/src/audio-io";
 import { binaryAudioCodec } from "../../../runtimes/realtime-device/src/binary-audio-codec";
-import type { AudioFrame } from "../../../runtimes/realtime-device/src/protocol";
+import type { AudioFrame, RealtimeServerMessage } from "../../../runtimes/realtime-device/src/protocol";
 import { WebSocketTransport, type WebSocketLike } from "../../../runtimes/realtime-device/src/websocket-transport";
 import { RealtimeAvatarController } from "./realtime-avatar-controller";
 import { AvatarRuntime } from "../../../runtimes/avatar/src/runtime";
@@ -131,7 +131,7 @@ export class RealtimeClient {
     await this.transport.send({
       type: "listen",
       mode: "start",
-    } as never);
+    });
     this.listening = true;
   }
 
