@@ -92,7 +92,7 @@ export class WebSocketTransport implements RealtimeTransport {
   }
 
   onMessage(
-    handler: (message: RealtimeControlMessage) => void | Promise<void>,
+    handler: (message: RealtimeServerMessage) => void | Promise<void>,
   ): () => void {
     this.messageHandlers.add(handler);
     return () => this.messageHandlers.delete(handler);
