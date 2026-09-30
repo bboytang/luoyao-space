@@ -27,6 +27,13 @@ export class PcmPlaybackTimeline {
     return { startTime, endTime };
   }
 
+  rollback(schedule: PlaybackSchedule): void {
+    if (schedule.endTime !== this.nextStartTime) {
+      throw new Error("PcmPlaybackTimeline can only roll back the latest schedule");
+    }
+    this.nextStartTime = schedule.startTime;
+  }
+
   getEndTime(): number {
     return this.nextStartTime;
   }
