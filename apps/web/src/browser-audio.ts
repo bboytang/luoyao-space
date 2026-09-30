@@ -170,8 +170,6 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
       source.connect(this.context.destination);
 
       const schedule = this.timeline.schedule(frame, this.context.currentTime);
-      const sample = this.lipSyncAnalyzer.analyze(frame);
-      if (sample) this.lipSyncTimeline.add(sample, schedule);
 
       this.pendingSources += 1;
       let ended = false;
@@ -188,9 +186,12 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
 
       try {
         source.start(schedule.startTime);
+        const sample = this.lipSyncAnalyzer.analyze(frame);
+        if (sample) this.lipSyncTimeline.add(sample, schedule);
       } catch (error) {
         source.onended = null;
         this.pendingSources -= 1;
+        this.timeline.rollback(schedule);
         throw error;
       }
     });
