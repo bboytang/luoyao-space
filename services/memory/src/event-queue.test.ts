@@ -28,7 +28,7 @@ function event(id = "00000000-0000-0000-0000-000000000101"): DomainEvent {
 
 describe("PostgresMemoryEventQueue", () => {
   it("enqueues idempotently and preserves the event payload", async () => {
-    const query = vi.fn(async () => ({ rows: [] }));
+    const query = vi.fn(async (_text: string, _values?: readonly unknown[]) => ({ rows: [] }));
     const queue = new PostgresMemoryEventQueue({ query });
 
     await queue.enqueue(event());
