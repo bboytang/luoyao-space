@@ -5,7 +5,7 @@ import { ToolExecutionError } from "../../tool-runtime/src/runner";
 import { InMemoryTaskEventPublisher } from "./events";
 import { TaskLifecycleService } from "./lifecycle";
 import { InMemoryTaskRepository } from "./repository";
-import { executeTask } from "./task-runner";
+import { executeTask, resumePersistedTask } from "./task-runner";
 import { resumeTask } from "./task-control";
 
 const capabilities: CapabilityDefinition[] = [
@@ -299,6 +299,79 @@ describe("executeTask", () => {
     expect(resumed.task.status).toBe("COMPLETED");
     expect(resumed.task.currentStep).toBe(2);
     expect(resumed.task.version).toBe(8);
+  });
+
+  it("restarts from persisted RUNNING state after an expired lease", async () => {
+    const { repository, lifecycle } = setup();
+    await createTask(lifecycle);
+
+    const loaded = await repository.get({
+      taskId: task.taskId,
+      userId: task.userId,
+      companionId: task.companionId,
+    });
+
+    await repository.claimStep({
+      task: loaded!,
+      leaseId: "crashed-worker",
+      leaseExpiresAt: "2026-09-30T01:01:00.000Z",
+      now: "2026-09-30T01:00:00.000Z",
+    });
+
+    let calls = 0;
+
+    await expect(
+      (async () => {
+        const current = await repository.get({
+          taskId: task.taskId,
+          userId: task.userId,
+          companionId: task.companionId,
+        });
+        return executeTask({
+          task: current!,
+          device,
+          repository,
+          lifecycle,
+          permission,
+          resolveCapability,
+          backend: {
+            execute: async () => {
+              calls += 1;
+              return { recovered: true };
+            },
+          },
+          now: "2026-09-30T01:00:30.000Z",
+        });
+      })(),
+    ).rejects.toMatchObject({ code: "TASK_CONCURRENCY_CONFLICT" });
+
+    expect(calls).toBe(0);
+
+    const result = await resumePersistedTask({
+      taskId: task.taskId,
+      userId: task.userId,
+      companionId: task.companionId,
+      device,
+      repository,
+      lifecycle,
+      permission,
+      resolveCapability,
+      backend: {
+        execute: async (invocation) => {
+          calls += 1;
+          return { recovered: invocation.capabilityId };
+        },
+      },
+      now: "2026-09-30T01:01:01.000Z",
+    });
+
+    expect(calls).toBe(2);
+    expect(result.task.status).toBe("COMPLETED");
+    expect(result.task.currentStep).toBe(2);
+    expect(result.task.result).toEqual([
+      { recovered: "filesystem.write" },
+      { recovered: "browser.open" },
+    ]);
   });
 
   it("rejects a stale task snapshot before execution", async () => {
