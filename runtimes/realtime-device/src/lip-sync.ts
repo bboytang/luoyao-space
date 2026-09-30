@@ -5,6 +5,8 @@ export interface LipSyncSample {
   sequence: number;
   /** Normalized mouth-open intensity, 0 = closed and 1 = fully open. */
   openness: number;
+  /** Duration represented by this sample, in seconds. */
+  durationSeconds: number;
 }
 
 export interface LipSyncAnalyzer {
@@ -17,7 +19,15 @@ export interface LipSyncAnalyzer {
  */
 export class PcmLipSyncAnalyzer implements LipSyncAnalyzer {
   analyze(frame: AudioFrame): LipSyncSample | undefined {
-    if (frame.codec !== "pcm_s16le" || frame.payload.byteLength < 2) return undefined;
+    if (
+      frame.codec !== "pcm_s16le" ||
+      frame.channels <= 0 ||
+      frame.sampleRate <= 0 ||
+      frame.payload.byteLength < 2 ||
+      frame.payload.byteLength % 2 !== 0
+    ) {
+      return undefined;
+    }
 
     const view = new DataView(frame.payload.buffer, frame.payload.byteOffset, frame.payload.byteLength);
     let sumSquares = 0;
@@ -30,6 +40,12 @@ export class PcmLipSyncAnalyzer implements LipSyncAnalyzer {
     if (samples === 0) return undefined;
 
     const rms = Math.sqrt(sumSquares / samples);
-    return { sequence: frame.sequence, openness: Math.min(1, rms * 4) };
+    const frameSamples = samples / frame.channels;
+
+    return {
+      sequence: frame.sequence,
+      openness: Math.min(1, rms * 4),
+      durationSeconds: frameSamples / frame.sampleRate,
+    };
   }
 }
