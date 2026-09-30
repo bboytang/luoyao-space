@@ -1,14 +1,8 @@
 import type { AudioFrame } from "../../../runtimes/realtime-device/src/protocol";
+import type { AudioFrameHandler, RealtimeAudioInput, RealtimeAudioOutput } from "../../../runtimes/realtime-device/src/audio-io";
 
-export interface AudioCapture {
-  start(onFrame: (frame: AudioFrame) => void): Promise<void>;
-  stop(): Promise<void>;
-}
-
-export interface AudioPlayback {
-  play(frame: AudioFrame): Promise<void>;
-  stop(): Promise<void>;
-}
+export type AudioCapture = RealtimeAudioInput;
+export type AudioPlayback = RealtimeAudioOutput;
 
 export interface BrowserAudioOptions {
   sampleRate?: number;
@@ -16,7 +10,7 @@ export interface BrowserAudioOptions {
 }
 
 /** Browser microphone adapter. It emits provider-neutral mono PCM16 frames. */
-export class BrowserPcmCapture implements AudioCapture {
+export class BrowserPcmCapture implements RealtimeAudioInput {
   private readonly sampleRate: number;
   private readonly frameSamples: number;
   private stream?: MediaStream;
@@ -32,7 +26,7 @@ export class BrowserPcmCapture implements AudioCapture {
     this.frameSamples = options.frameSamples ?? 480;
   }
 
-  async start(onFrame: (frame: AudioFrame) => void): Promise<void> {
+  async start(onFrame: AudioFrameHandler): Promise<void> {
     if (this.context) return;
 
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -85,7 +79,7 @@ export class BrowserPcmCapture implements AudioCapture {
 }
 
 /** Browser PCM16 player with sequential scheduling; compressed codecs stay outside this adapter. */
-export class BrowserPcmPlayback implements AudioPlayback {
+export class BrowserPcmPlayback implements RealtimeAudioOutput {
   private context?: AudioContext;
   private nextStartTime = 0;
 
