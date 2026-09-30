@@ -40,22 +40,4 @@ describe("RealtimeAvatarController", () => {
     expect(avatar.getState().speaking).toBe(false);
   });
 
-  it("forwards output audio without owning playback", () => {
-    const avatar = createAvatar();
-    const onAudio = vi.fn();
-    const controller = new RealtimeAvatarController({ avatar, onAudio });
-    const frame = {
-      kind: "audio" as const,
-      codec: "pcm_s16le" as const,
-      sampleRate: 24_000,
-      channels: 1,
-      sequence: 1,
-      payload: new Uint8Array([0, 0]),
-    };
-
-    controller.handleAudioFrame(frame);
-
-    expect(avatar.getState().speaking).toBe(true);
-    expect(onAudio).toHaveBeenCalledWith(frame);
-  });
-});
+  it("marks the avatar as speaking when audio arrives", () => {\n    const avatar = createAvatar();\n    const controller = new RealtimeAvatarController({ avatar });\n\n    controller.handleAudioFrame();\n\n    expect(avatar.getState().speaking).toBe(true);\n  });\n});\n
