@@ -163,6 +163,7 @@ export class RealtimeClient {
       deviceId: this.deviceId,
       capabilities: ["audio.pcm_s16le", "avatar.dynamic"],
     });
+    if (this.closed) throw new Error("RealtimeClient is closed");
     this.setState("connected");
   }
 
