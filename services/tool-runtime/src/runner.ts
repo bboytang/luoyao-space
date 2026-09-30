@@ -6,6 +6,16 @@ import type {
 import type { DeviceIdentity } from "../../../packages/protocol/src/identity";
 import { checkExecutionGate, type ExecutionGateContext } from "./execution-gate";
 
+export class ToolExecutionError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "ToolExecutionError";
+    this.code = code;
+  }
+}
+
 export interface CapabilityBackend<Input = unknown, Output = unknown> {
   execute(
     invocation: CapabilityInvocation<Input>,
@@ -46,7 +56,9 @@ export async function executeCapability(
       invocationId: invocation.id,
       ok: false,
       error: {
-        code: "BACKEND_EXECUTION_FAILED",
+        code: error instanceof ToolExecutionError
+          ? error.code
+          : "BACKEND_EXECUTION_FAILED",
         message: error instanceof Error ? error.message : String(error),
       },
     };
