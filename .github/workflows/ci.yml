@@ -35,3 +35,4 @@ jobs:
       - run: test -n "$DATABASE_URL"
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm build
