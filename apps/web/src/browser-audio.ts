@@ -1,5 +1,6 @@
 import type { AudioFrame } from "../../../runtimes/realtime-device/src/protocol";
 import type { AudioFrameHandler, RealtimeAudioInput, RealtimeAudioOutput } from "../../../runtimes/realtime-device/src/audio-io";
+import { PcmPlaybackTimeline } from "../../../runtimes/realtime-device/src/playback-timeline";
 
 export type AudioCapture = RealtimeAudioInput;
 export type AudioPlayback = RealtimeAudioOutput;
@@ -91,7 +92,7 @@ export class BrowserPcmCapture implements RealtimeAudioInput {
 /** Browser PCM16 player with sequential scheduling; compressed codecs stay outside this adapter. */
 export class BrowserPcmPlayback implements RealtimeAudioOutput {
   private context?: AudioContext;
-  private nextStartTime = 0;
+  private readonly timeline = new PcmPlaybackTimeline();
 
   constructor(private readonly sampleRate = 24_000) {}
 
@@ -116,15 +117,13 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
     source.buffer = buffer;
     source.connect(this.context.destination);
 
-    const now = this.context.currentTime;
-    this.nextStartTime = Math.max(now, this.nextStartTime);
-    source.start(this.nextStartTime);
-    this.nextStartTime += buffer.duration;
+    const schedule = this.timeline.schedule(frame, this.context.currentTime);
+    source.start(schedule.startTime);
   }
 
   async stop(): Promise<void> {
     await this.context?.close();
     this.context = undefined;
-    this.nextStartTime = 0;
+    this.timeline.reset();
   }
 }
