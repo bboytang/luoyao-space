@@ -27,6 +27,10 @@ export class PcmPlaybackTimeline {
     return { startTime, endTime };
   }
 
+  getEndTime(): number {
+    return this.nextStartTime;
+  }
+
   reset(): void {
     this.nextStartTime = 0;
   }
