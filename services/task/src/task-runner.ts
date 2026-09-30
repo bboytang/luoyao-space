@@ -38,7 +38,11 @@ export async function executeTask(
     throw new Error("Task execution requires a target device");
   }
 
-  if (task.deviceId && task.deviceId !== input.device.deviceId) {
+  if (!task.deviceId) {
+    throw new Error("Task must be bound to a target device");
+  }
+
+  if (task.deviceId !== input.device.deviceId) {
     throw new Error("Task target device does not match execution device");
   }
 
