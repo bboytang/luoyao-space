@@ -1,0 +1,168 @@
+import type { RealtimeAudioInput, RealtimeAudioOutput } from "../../../runtimes/realtime-device/src/audio-io";
+import { binaryAudioCodec } from "../../../runtimes/realtime-device/src/binary-audio-codec";
+import type { AudioFrame } from "../../../runtimes/realtime-device/src/protocol";
+import { WebSocketTransport, type WebSocketLike } from "../../../runtimes/realtime-device/src/websocket-transport";
+import type { RealtimeServerMessage } from "../../../runtimes/realtime-device/src/protocol";
+import { RealtimeAvatarController } from "./realtime-avatar-controller";
+import { AvatarRuntime } from "../../../runtimes/avatar/src/runtime";
+
+export interface RealtimeClientOptions {
+  url: string;
+  avatar: AvatarRuntime;
+  input: RealtimeAudioInput;
+  output: RealtimeAudioOutput;
+  sessionId?: string;
+  deviceId?: string;
+}
+
+export class BrowserWebSocket implements WebSocketLike {
+  private readonly socket: WebSocket;
+
+  constructor(url: string) {
+    this.socket = new WebSocket(url);
+    this.socket.binaryType = "arraybuffer";
+  }
+
+  send(data: string | Uint8Array): void {
+    this.socket.send(data);
+  }
+
+  close(code?: number, reason?: string): void {
+    this.socket.close(code, reason);
+  }
+
+  addEventListener(
+    type: "message" | "close",
+    listener:
+      | ((event: { data: string | Uint8Array }) => void)
+      | ((event: { code: number; reason: string; wasClean: boolean }) => void),
+  ): void {
+    if (type === "message") {
+      this.socket.addEventListener("message", (event) => {
+        const data = typeof event.data === "string"
+          ? event.data
+          : event.data instanceof ArrayBuffer
+            ? new Uint8Array(event.data)
+            : event.data;
+        (listener as (event: { data: string | Uint8Array }) => void)({ data });
+      });
+      return;
+    }
+
+    this.socket.addEventListener("close", (event) => {
+      (listener as (event: { code: number; reason: string; wasClean: boolean }) => void)({
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+      });
+    });
+  }
+
+  waitForOpen(): Promise<void> {
+    if (this.socket.readyState === WebSocket.OPEN) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      this.socket.addEventListener("open", () => resolve(), { once: true });
+      this.socket.addEventListener("error", () => reject(new Error("WebSocket connection failed")), {
+        once: true,
+      });
+    });
+  }
+}
+
+function createSessionId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export class RealtimeClient {
+  private readonly socket: BrowserWebSocket;
+  private readonly transport: WebSocketTransport;
+  private readonly avatarController: RealtimeAvatarController;
+  private readonly input: RealtimeAudioInput;
+  private readonly output: RealtimeAudioOutput;
+  private removeMessage?: () => void;
+  private removeAudio?: () => void;
+  private removeClose?: () => void;
+  private listening = false;
+
+  constructor(options: RealtimeClientOptions) {
+    this.socket = new BrowserWebSocket(options.url);
+    this.transport = new WebSocketTransport(this.socket, binaryAudioCodec);
+    this.input = options.input;
+    this.output = options.output;
+    this.avatarController = new RealtimeAvatarController({
+      avatar: options.avatar,
+      onAudio: (frame) => void this.output.play(frame),
+    });
+
+    this.removeMessage = this.transport.onMessage((message) => {
+      this.avatarController.handleServerMessage(message as RealtimeServerMessage);
+    });
+    this.removeAudio = this.transport.onAudio((frame) => {
+      this.avatarController.handleAudioFrame(frame);
+      void this.output.play(frame);
+    });
+    this.removeClose = this.transport.onClose(() => {
+      this.listening = false;
+      this.avatarController.handleClosed();
+      void this.input.stop();
+      void this.output.stop();
+    });
+
+    this.sessionId = options.sessionId ?? createSessionId();
+    this.deviceId = options.deviceId;
+  }
+
+  readonly sessionId: string;
+  readonly deviceId?: string;
+
+  async connect(): Promise<void> {
+    await this.socket.waitForOpen();
+    await this.transport.send({
+      type: "hello",
+      version: 1,
+      sessionId: this.sessionId,
+      deviceId: this.deviceId,
+      capabilities: ["audio.pcm_s16le", "avatar.dynamic"],
+    } as never);
+  }
+
+  async startListening(): Promise<void> {
+    if (this.listening) return;
+    await this.input.start((frame: AudioFrame) => void this.transport.sendAudio(frame));
+    await this.transport.send({
+      type: "listen",
+      mode: "start",
+    } as never);
+    this.listening = true;
+  }
+
+  async stopListening(): Promise<void> {
+    if (!this.listening) return;
+    this.listening = false;
+    await this.transport.send({
+      type: "listen",
+      mode: "stop",
+    } as never);
+    await this.input.stop();
+  }
+
+  async abort(): Promise<void> {
+    this.listening = false;
+    await this.input.stop();
+    await this.transport.send({
+      type: "abort",
+      reason: "user_cancel",
+    } as never);
+  }
+
+  async close(): Promise<void> {
+    this.listening = false;
+    await this.input.stop();
+    await this.output.stop();
+    this.removeMessage?.();
+    this.removeAudio?.();
+    this.removeClose?.();
+    await this.transport.close(1000, "client closed");
+  }
+}
