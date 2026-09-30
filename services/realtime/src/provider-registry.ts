@@ -5,6 +5,7 @@ import type {
   TtsProvider,
   VadProvider,
 } from "../../../runtimes/realtime-device/src/audio-pipeline";
+import { OpenAiLlmProvider } from "./providers/openai-llm";
 
 export interface ProviderOptions {
   readonly [key: string]: unknown;
@@ -29,9 +30,31 @@ export interface RealtimeProviderFactories {
   readonly tts: Record<string, (options?: ProviderOptions) => TtsProvider>;
 }
 
-export function validateRealtimeProviderConfig(
-  config: RealtimeProviderConfig,
-): void {
+function requireStringOption(options: ProviderOptions | undefined, name: string): string {
+  const value = options?.[name];
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`Provider option "${name}" is required`);
+  }
+  return value;
+}
+
+export function createDefaultRealtimeProviderFactories(): RealtimeProviderFactories {
+  return {
+    vad: {},
+    asr: {},
+    llm: {
+      openai: (options) =>
+        new OpenAiLlmProvider({
+          apiKey: requireStringOption(options, "apiKey"),
+          model: requireStringOption(options, "model"),
+          baseUrl: typeof options?.baseUrl === "string" ? options.baseUrl : undefined,
+        }),
+    },
+    tts: {},
+  };
+}
+
+export function validateRealtimeProviderConfig(config: RealtimeProviderConfig): void {
   const selections: Array<[keyof RealtimeProviderConfig, ProviderSelection]> = [
     ["vad", config.vad],
     ["asr", config.asr],
