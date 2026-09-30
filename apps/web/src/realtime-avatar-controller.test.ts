@@ -37,6 +37,9 @@ describe("RealtimeAvatarController", () => {
       state: "stop",
       messageId: "m1",
     });
+    expect(avatar.getState().speaking).toBe(true);
+
+    controller.handlePlaybackIdle();
     expect(avatar.getState().speaking).toBe(false);
   });
 
