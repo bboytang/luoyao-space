@@ -33,7 +33,7 @@ describe("PcmLipSyncAnalyzer", () => {
       frame(new Uint8Array(16), "pcm_s16le", 2, 8_000),
     )!;
 
-    expect(sample.durationSeconds).toBe(2 / 8_000);
+    expect(sample.durationSeconds).toBe(4 / 8_000);
   });
 
   it("does not pretend to decode compressed audio", () => {
