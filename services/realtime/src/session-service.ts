@@ -56,6 +56,7 @@ export class RealtimeSessionService {
   private conversationId?: string;
   private queue?: AudioFrameQueue;
   private controller?: AbortController;
+  private pipelinePromise?: Promise<void>;
   private ttsMessageId?: string;
   private closed = false;
 
@@ -140,7 +141,11 @@ export class RealtimeSessionService {
       this.controller = new AbortController();
       this.ttsMessageId = undefined;
 
-      void this.runPipeline(this.queue, this.controller);
+      const pipelinePromise = this.runPipeline(this.queue, this.controller);
+      this.pipelinePromise = pipelinePromise;
+      void pipelinePromise.finally(() => {
+        if (this.pipelinePromise === pipelinePromise) this.pipelinePromise = undefined;
+      });
       return;
     }
 
@@ -155,6 +160,7 @@ export class RealtimeSessionService {
   private async handleAbort(): Promise<void> {
     this.controller?.abort();
     this.queue?.end();
+    await this.pipelinePromise;
   }
 
   private async runPipeline(queue: AudioFrameQueue, controller: AbortController): Promise<void> {
