@@ -1,8 +1,10 @@
-import type { AvatarLipSyncDriver } from "./avatar-lip-sync";
-
 export interface AvatarRenderLoopScheduler {
   request(callback: () => void): number;
   cancel(handle: number): void;
+}
+
+export interface AvatarRenderLoopLipSync {
+  update(): void;
 }
 
 /**
@@ -16,7 +18,7 @@ export class AvatarRenderLoop {
 
   constructor(
     private readonly scheduler: AvatarRenderLoopScheduler,
-    private readonly lipSync: AvatarLipSyncDriver,
+    private readonly lipSync: AvatarRenderLoopLipSync,
     private readonly render: () => void,
   ) {}
 
