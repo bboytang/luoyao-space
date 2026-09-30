@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AudioFrame } from "./protocol";
 import { AvatarRealtimeBridge } from "./avatar-bridge";
 import { AvatarRuntime, type AvatarRenderer } from "../../../runtimes/avatar/src/runtime";
+import type { LipSyncAnalyzer } from "./lip-sync";
 
 const frame: AudioFrame = { kind: "audio", codec: "pcm_s16le", sampleRate: 16_000, channels: 1, sequence: 1, payload: new Uint8Array([0, 1]) };
 
@@ -28,6 +29,15 @@ describe("AvatarRealtimeBridge", () => {
     expect(avatar.getState().speaking).toBe(true);
     bridge.handleOutput({ type: "completed" });
     expect(avatar.getState()).toMatchObject({ speaking: false, activity: "idle" });
+  });
+
+
+  it("forwards analyzed mouth openness without exposing audio details to the avatar", () => {
+    const avatar = runtime();
+    const analyzer: LipSyncAnalyzer = { analyze: () => ({ sequence: 1, openness: 0.65 }) };
+    const bridge = new AvatarRealtimeBridge(avatar, analyzer);
+    bridge.handleOutput({ type: "tts_audio", frame });
+    expect(avatar.getState()).toMatchObject({ speaking: true, mouthOpen: 0.65 });
   });
 
   it("stops speaking on abort or error", () => {
