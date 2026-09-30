@@ -69,8 +69,8 @@ describe("WebSocketTransport", () => {
     const socket = new FakeSocket();
     const transport = new WebSocketTransport(socket, codec);
 
-    const message: RealtimeServerMessage = {
-      type: "pong",
+    const message: RealtimeControlMessage = {
+      type: "ping",
       timestamp: "2026-01-01T00:00:00.000Z",
     };
     const frame: AudioFrame = {
