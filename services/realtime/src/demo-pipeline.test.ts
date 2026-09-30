@@ -43,6 +43,16 @@ describe("createDemoRealtimePipeline", () => {
       { type: "sentence", text: "你好，我在这里。" },
       { type: "done", finishReason: "stop" },
     ]);
-    expect(tts[1]).toEqual({ type: "audio", frame });
+    expect(tts[1]).toEqual({
+      type: "audio",
+      frame: {
+        kind: "audio",
+        codec: "pcm_s16le",
+        sampleRate: 24_000,
+        channels: 1,
+        sequence: 0,
+        payload: new Uint8Array(960),
+      },
+    });
   });
 });
