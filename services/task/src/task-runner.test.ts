@@ -175,11 +175,7 @@ describe("executeTask", () => {
         resolveCapability,
         backend: { execute: async () => ({}) },
       }),
-    ).resolves.toMatchObject({
-      task: {
-        status: "COMPLETED",
-      },
-    });
+    ).rejects.toThrow("Task must be bound to a target device");
   });
 
   it("does not let task approval bypass runtime permission checks", async () => {
