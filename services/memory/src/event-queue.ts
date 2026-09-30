@@ -80,6 +80,8 @@ export class PostgresMemoryEventQueue implements MemoryEventQueue {
       throw new Error("Memory event leaseMs must be positive");
     }
 
+    const expiredBefore = new Date(Date.parse(input.now) - input.leaseMs).toISOString();
+
     const result = await this.client.query<QueueRow>(
       `WITH candidate AS (
         SELECT event_id
