@@ -15,6 +15,10 @@ avatarRoot.className = "avatar-root";
 const controls = document.createElement("div");
 controls.className = "controls";
 
+const capture = new BrowserPcmCapture();
+const playback = new BrowserPcmPlayback();
+let realtimeClient: RealtimeClient | undefined;
+
 const renderer = new DomAvatarRenderer({ root: avatarRoot });
 const runtime = new AvatarRuntime({ renderer });
 const lipSync = new AvatarLipSyncDriver(runtime, playback);
@@ -71,10 +75,6 @@ stopButton.type = "button";
 stopButton.textContent = "停止";
 stopButton.disabled = true;
 realtimePanel.append(realtimeUrl, connectButton, listenButton, stopButton, realtimeStatus);
-
-const capture = new BrowserPcmCapture();
-const playback = new BrowserPcmPlayback();
-let realtimeClient: RealtimeClient | undefined;
 
 connectButton.addEventListener("click", async () => {
   if (realtimeClient) {
