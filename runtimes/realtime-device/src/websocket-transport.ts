@@ -1,4 +1,4 @@
-import type {
+import type { RealtimeServerMessage } from "./protocol";\nimport type {
   AudioFrame,
   RealtimeControlMessage,
 } from "./protocol";
@@ -23,7 +23,7 @@ export interface WebSocketLike {
 
 export class WebSocketTransport implements RealtimeTransport {
   private readonly messageHandlers = new Set<
-    (message: RealtimeControlMessage) => void | Promise<void>
+    (message: RealtimeServerMessage) => void | Promise<void>
   >();
   private readonly audioHandlers = new Set<
     (frame: AudioFrame) => void | Promise<void>
