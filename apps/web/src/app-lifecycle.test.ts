@@ -56,7 +56,7 @@ describe("AppLifecycle", () => {
     expect(secondFinished).toBe(true);
   });
 
-  it("does not dispose the runtime when realtime cleanup fails", async () => {
+  it("disposes the runtime even when realtime cleanup fails", async () => {
     const disposeRuntime = vi.fn();
     const error = new Error("realtime cleanup failed");
     const lifecycle = new AppLifecycle({
@@ -66,7 +66,7 @@ describe("AppLifecycle", () => {
     });
 
     await expect(lifecycle.dispose()).rejects.toBe(error);
-    expect(disposeRuntime).not.toHaveBeenCalled();
+    expect(disposeRuntime).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the same failed cleanup promise for later callers", async () => {

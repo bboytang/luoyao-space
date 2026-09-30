@@ -17,8 +17,21 @@ export class AppLifecycle {
 
     this.disposePromise = (async () => {
       this.resources.stopRenderLoop();
-      await this.resources.closeRealtime();
-      this.resources.disposeRuntime();
+
+      let cleanupError: unknown;
+      try {
+        await this.resources.closeRealtime();
+      } catch (error) {
+        cleanupError = error;
+      }
+
+      try {
+        this.resources.disposeRuntime();
+      } catch (error) {
+        cleanupError ??= error;
+      }
+
+      if (cleanupError !== undefined) throw cleanupError;
     })();
 
     await this.disposePromise;

@@ -4,6 +4,7 @@ import { BrowserPcmCapture, BrowserPcmPlayback } from "./browser-audio";
 import { RealtimeClient } from "./realtime-client";
 import { AvatarLipSyncDriver } from "./avatar-lip-sync";
 import { AvatarRenderLoop } from "./avatar-render-loop";
+import { AppLifecycle } from "./app-lifecycle";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Luoyao Space app root is missing");
@@ -180,8 +181,14 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+const lifecycle = new AppLifecycle({
+  stopRenderLoop: () => renderLoop.stop(),
+  closeRealtime: async () => {
+    await realtimeClient?.close();
+  },
+  disposeRuntime: () => runtime.dispose(),
+});
+
 window.addEventListener("pagehide", () => {
-  renderLoop.stop();
-  void realtimeClient?.close();
-  runtime.dispose();
+  void lifecycle.dispose().catch(() => undefined);
 });
