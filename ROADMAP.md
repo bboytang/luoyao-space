@@ -58,7 +58,7 @@
 
 - [x] durable event consumer/queue
 - [ ] automatic embedding generation on writes
-- [ ] exact embedding-dimension enforcement
+- [x] exact embedding-dimension enforcement
 - [ ] stronger memory observability
 - [ ] memory lifecycle/retention policy
 - [ ] project memory aggregation
