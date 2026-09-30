@@ -8,9 +8,15 @@ import { isControlMessage } from "../../../runtimes/realtime-device/src/protocol
 import { binaryAudioCodec } from "../../../runtimes/realtime-device/src/binary-audio-codec";
 
 export interface ServerWebSocketLike {
+  send(data: string | Uint8Array): void;
+  close(code?: number, reason?: string): void;
   addEventListener(
     type: "message",
     listener: (event: { data: string | Uint8Array | ArrayBuffer }) => void,
+  ): void;
+  addEventListener(
+    type: "close",
+    listener: () => void,
   ): void;
 }
 
