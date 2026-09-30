@@ -5,10 +5,7 @@ export function pauseTask(task: AgentTask, now?: string): AgentTask {
   return updateStatus(task, "PAUSED", now);
 }
 
-export function requestUserInput(
-  task: AgentTask,
-  now?: string,
-): AgentTask {
+export function requestUserInput(task: AgentTask, now?: string): AgentTask {
   return updateStatus(task, "WAITING_USER", now);
 }
 
@@ -24,6 +21,8 @@ export function resumeTask(task: AgentTask, now?: string): AgentTask {
     status: transition(task.status, "RUNNING"),
     error: undefined,
     version: task.version + 1,
+    executionLeaseId: undefined,
+    executionLeaseExpiresAt: undefined,
     updatedAt: now ?? new Date().toISOString(),
   };
 }
@@ -37,6 +36,8 @@ function updateStatus(
     ...task,
     status: transition(task.status, target),
     version: task.version + 1,
+    executionLeaseId: undefined,
+    executionLeaseExpiresAt: undefined,
     updatedAt: now ?? new Date().toISOString(),
   };
 }
