@@ -42,6 +42,29 @@ describe("runAudioPipeline", () => {
     expect(outputs).toEqual(["stt", "error"]);
   });
 
+  it("reports latency milestones without changing pipeline outputs", async () => {
+    const metrics: Array<Readonly<import("./audio-pipeline").PipelineMetrics>> = [];
+    const pipeline: AudioPipeline = {
+      vad: { detect: async () => ({ speech: true, startOfSpeech: true, endOfSpeech: true }) },
+      asr: { async *transcribe() { yield { type: "partial", text: "hello" as const }; yield { type: "final", text: "hello" as const }; } },
+      llm: { async *stream() { yield { type: "text_delta", text: "hi" as const }; yield { type: "sentence", text: "hi" as const }; } },
+      tts: { async *synthesize() { yield { type: "started" as const }; yield { type: "audio" as const, frame }; yield { type: "completed" as const }; } },
+    };
+    const outputs: string[] = [];
+    for await (const output of runAudioPipeline(pipeline, (async function* () { yield frame; })(), {
+      sessionId: "metrics-session", conversationId: "metrics-conversation", signal: new AbortController().signal,
+      onMetrics: (value) => metrics.push(value),
+    })) outputs.push(output.type);
+    expect(outputs).toEqual(["stt", "stt", "tts_audio", "completed"]);
+    const final = metrics.at(-1);
+    expect(final?.asrFirstPartialMs).toBeTypeOf("number");
+    expect(final?.asrFinalMs).toBeTypeOf("number");
+    expect(final?.llmFirstTokenMs).toBeTypeOf("number");
+    expect(final?.firstSentenceMs).toBeTypeOf("number");
+    expect(final?.ttsFirstAudioMs).toBeTypeOf("number");
+    expect(final?.totalResponseMs).toBeTypeOf("number");
+  });
+
   it("does not wait for a live input stream after abort", async () => {
     const controller = new AbortController();
 
