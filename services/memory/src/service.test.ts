@@ -172,7 +172,7 @@ describe("MemoryService", () => {
     };
     const embed = vi.fn(async ({ text }: { text: string }) => ({
       providerId: "test-provider",
-      vector: [0.1, 0.2, 0.3],
+      vector: Array.from({ length: 1536 }, (_, index) => index / 1536),
     }));
 
     const service = createMemoryService(repository, {
@@ -189,7 +189,7 @@ describe("MemoryService", () => {
 
     expect(embed).toHaveBeenCalledWith({ text: "喜欢短回复" });
     expect(repository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ embedding: [0.1, 0.2, 0.3] }),
+      expect.objectContaining({ embedding: Array.from({ length: 1536 }, (_, index) => index / 1536) }),
     );
   });
 
@@ -211,7 +211,7 @@ describe("MemoryService", () => {
     };
     const embed = vi.fn(async () => ({
       providerId: "test-provider",
-      vector: [0.4, 0.5, 0.6],
+      vector: Array.from({ length: 1536 }, (_, index) => index / 1536),
     }));
     const service = createMemoryService(repository, { id: "test-provider", embed });
 
@@ -230,7 +230,7 @@ describe("MemoryService", () => {
     expect(embed).toHaveBeenCalledWith({ text: "新内容" });
     expect(repository.replace).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({ embedding: [0.4, 0.5, 0.6] }),
+        update: expect.objectContaining({ embedding: Array.from({ length: 1536 }, (_, index) => index / 1536) }),
       }),
     );
   });
