@@ -31,10 +31,11 @@ describe("AvatarRealtimeBridge", () => {
     expect(avatar.getState()).toMatchObject({ speaking: false, activity: "idle" });
   });
 
-
   it("forwards analyzed mouth openness without exposing audio details to the avatar", () => {
     const avatar = runtime();
-    const analyzer: LipSyncAnalyzer = { analyze: () => ({ sequence: 1, openness: 0.65 }) };
+    const analyzer: LipSyncAnalyzer = {
+      analyze: () => ({ sequence: 1, openness: 0.65, durationSeconds: 0.01 }),
+    };
     const bridge = new AvatarRealtimeBridge(avatar, analyzer);
     bridge.handleOutput({ type: "tts_audio", frame });
     expect(avatar.getState()).toMatchObject({ speaking: true, mouthOpen: 0.65 });
