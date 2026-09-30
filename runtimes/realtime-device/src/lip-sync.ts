@@ -3,6 +3,8 @@ import type { AudioFrame } from "./protocol";
 export interface LipSyncSample {
   /** Monotonic audio sequence number from the realtime stream. */
   sequence: number;
+  /** Presentation timestamp inherited from the audio frame, when available. */
+  timestampMs?: number;
   /** Normalized mouth-open intensity, 0 = closed and 1 = fully open. */
   openness: number;
 }
@@ -30,6 +32,6 @@ export class PcmLipSyncAnalyzer implements LipSyncAnalyzer {
     if (samples === 0) return undefined;
 
     const rms = Math.sqrt(sumSquares / samples);
-    return { sequence: frame.sequence, openness: Math.min(1, rms * 4) };
+    return { sequence: frame.sequence, timestampMs: frame.timestampMs, openness: Math.min(1, rms * 4) };
   }
 }
