@@ -1,5 +1,7 @@
 import type { AudioFrame } from "../../../runtimes/realtime-device/src/protocol";
 import type { AudioFrameHandler, RealtimeAudioInput, RealtimeAudioOutput } from "../../../runtimes/realtime-device/src/audio-io";
+import { PcmLipSyncAnalyzer } from "../../../runtimes/realtime-device/src/lip-sync";
+import { LipSyncPlaybackTimeline } from "../../../runtimes/realtime-device/src/lip-sync-playback-timeline";
 import { PcmPlaybackTimeline } from "../../../runtimes/realtime-device/src/playback-timeline";
 
 export type AudioCapture = RealtimeAudioInput;
@@ -93,44 +95,70 @@ export class BrowserPcmCapture implements RealtimeAudioInput {
 export class BrowserPcmPlayback implements RealtimeAudioOutput {
   private context?: AudioContext;
   private readonly timeline = new PcmPlaybackTimeline();
+  private readonly lipSyncAnalyzer = new PcmLipSyncAnalyzer();
+  private readonly lipSyncTimeline = new LipSyncPlaybackTimeline();
+  private playTail: Promise<void> = Promise.resolve();
+  private playbackGeneration = 0;
 
   constructor(private readonly sampleRate = 24_000) {}
 
-  async play(frame: AudioFrame): Promise<void> {
-    if (frame.codec !== "pcm_s16le" || frame.channels !== 1) {
-      throw new Error("BrowserPcmPlayback requires mono pcm_s16le frames");
-    }
+  play(frame: AudioFrame): Promise<void> {
+    const generation = this.playbackGeneration;
+    const operation = this.playTail.then(async () => {
+      if (generation !== this.playbackGeneration) return;
+      if (frame.codec !== "pcm_s16le" || frame.channels !== 1) {
+        throw new Error("BrowserPcmPlayback requires mono pcm_s16le frames");
+      }
 
-    this.context ??= new AudioContext({ sampleRate: this.sampleRate });
-    await this.context.resume();
+      this.context ??= new AudioContext({ sampleRate: this.sampleRate });
+      await this.context.resume();
+      if (generation !== this.playbackGeneration) return;
 
-    const samples = new Float32Array(frame.payload.byteLength / 2);
-    const view = new DataView(frame.payload.buffer, frame.payload.byteOffset, frame.payload.byteLength);
-    for (let i = 0; i < samples.length; i += 1) {
-      samples[i] = view.getInt16(i * 2, true) / 32768;
-    }
+      const samples = new Float32Array(frame.payload.byteLength / 2);
+      const view = new DataView(frame.payload.buffer, frame.payload.byteOffset, frame.payload.byteLength);
+      for (let i = 0; i < samples.length; i += 1) {
+        samples[i] = view.getInt16(i * 2, true) / 32768;
+      }
 
-    const buffer = this.context.createBuffer(1, samples.length, frame.sampleRate);
-    buffer.copyToChannel(samples, 0);
+      const buffer = this.context.createBuffer(1, samples.length, frame.sampleRate);
+      buffer.copyToChannel(samples, 0);
 
-    const source = this.context.createBufferSource();
-    source.buffer = buffer;
-    source.connect(this.context.destination);
+      const source = this.context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.context.destination);
 
-    const schedule = this.timeline.schedule(frame, this.context.currentTime);
-    source.start(schedule.startTime);
+      const schedule = this.timeline.schedule(frame, this.context.currentTime);
+      const sample = this.lipSyncAnalyzer.analyze(frame);
+      if (sample) this.lipSyncTimeline.add(sample, schedule);
+      source.start(schedule.startTime);
+    });
+
+    this.playTail = operation.catch(() => undefined);
+    return operation;
   }
 
   async waitForIdle(): Promise<void> {
+    await this.playTail;
     const context = this.context;
     if (!context) return;
     const remainingMs = Math.max(0, (this.timeline.getEndTime() - context.currentTime) * 1000);
     if (remainingMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, remainingMs));
   }
 
+  getPlaybackTime(): number {
+    return this.context?.currentTime ?? 0;
+  }
+
+  getMouthOpenAt(timeSeconds: number): number {
+    return this.lipSyncTimeline.sampleAt(timeSeconds);
+  }
+
   async stop(): Promise<void> {
+    this.playbackGeneration += 1;
+    await this.playTail;
     await this.context?.close();
     this.context = undefined;
     this.timeline.reset();
+    this.lipSyncTimeline.reset();
   }
 }
