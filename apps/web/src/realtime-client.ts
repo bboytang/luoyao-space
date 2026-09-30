@@ -89,6 +89,7 @@ export class RealtimeClient {
   private removeClose?: () => void;
   private listening = false;
   private closed = false;
+  private closePromise?: Promise<void>;
 
   constructor(options: RealtimeClientOptions) {
     this.socket = options.socket ?? new BrowserWebSocket(options.url);
@@ -127,6 +128,7 @@ export class RealtimeClient {
   async connect(): Promise<void> {
     if (this.closed) throw new Error("RealtimeClient is closed");
     await this.socket.waitForOpen();
+    if (this.closed) throw new Error("RealtimeClient is closed");
     await this.transport.send({
       type: "hello",
       version: 1,
@@ -184,7 +186,11 @@ export class RealtimeClient {
   }
 
   async close(): Promise<void> {
-    if (this.closed) return;
+    if (this.closePromise) {
+      await this.closePromise;
+      return;
+    }
+
     this.closed = true;
     this.listening = false;
 
@@ -195,8 +201,12 @@ export class RealtimeClient {
     this.removeAudio = undefined;
     this.removeClose = undefined;
 
-    await this.input.stop();
-    await this.output.stop();
-    await this.transport.close(1000, "client closed");
+    this.closePromise = (async () => {
+      await this.input.stop();
+      await this.output.stop();
+      await this.transport.close(1000, "client closed");
+    })();
+
+    await this.closePromise;
   }
 }
