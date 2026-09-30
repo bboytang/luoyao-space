@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CapabilityDefinition } from "../../../packages/protocol/src/capabilities";
 import type { AgentTask } from "../../../packages/protocol/src/tasks";
 import { executeTask } from "./task-runner";
+import { ToolExecutionError } from "../../tool-runtime/src/runner";
 
 const capabilities: CapabilityDefinition[] = [
   {
@@ -164,6 +165,33 @@ describe("executeTask", () => {
         backend: { execute: async () => ({}) },
       }),
     ).rejects.toThrow("Task must be RUNNING");
+  });
+
+  it("waits for user input without advancing the current step", async () => {
+    let calls = 0;
+
+    const result = await executeTask({
+      task,
+      device,
+      permission,
+      resolveCapability,
+      backend: {
+        execute: async () => {
+          calls += 1;
+          throw new ToolExecutionError(
+            "USER_INPUT_REQUIRED",
+            "请选择目标文件",
+          );
+        },
+      },
+      now: "2026-09-30T01:03:00.000Z",
+    });
+
+    expect(calls).toBe(1);
+    expect(result.stepResults).toHaveLength(1);
+    expect(result.task.status).toBe("WAITING_USER");
+    expect(result.task.currentStep).toBe(0);
+    expect(result.task.updatedAt).toBe("2026-09-30T01:03:00.000Z");
   });
 
   it("rejects a task without a target device", async () => {
