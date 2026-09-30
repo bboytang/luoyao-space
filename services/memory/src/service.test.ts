@@ -151,4 +151,88 @@ describe("MemoryService", () => {
     });
     expect(emitted).toEqual(["memory.deleted"]);
   });
+
+  it("automatically embeds direct writes when a provider is configured", async () => {
+    const repository: MemoryRepository = {
+      create: vi.fn(async (input) => ({
+        id: "m-direct",
+        userId: input.userId,
+        companionId: input.companionId,
+        kind: input.kind,
+        content: input.content,
+        importance: input.importance ?? 0.5,
+        relationshipRelevance: input.relationshipRelevance ?? 0,
+        projectRelevance: input.projectRelevance ?? 0,
+        createdAt: input.createdAt ?? "2026-09-30T00:00:00Z",
+      })),
+      replace: vi.fn(),
+      remove: vi.fn(),
+      findCandidates: vi.fn(async () => []),
+      markAccessed: vi.fn(),
+    };
+    const embed = vi.fn(async ({ text }: { text: string }) => ({
+      providerId: "test-provider",
+      vector: [0.1, 0.2, 0.3],
+    }));
+
+    const service = createMemoryService(repository, {
+      id: "test-provider",
+      embed,
+    });
+
+    await service.remember({
+      userId: "u1",
+      companionId: "c1",
+      kind: "fact",
+      content: "喜欢短回复",
+    });
+
+    expect(embed).toHaveBeenCalledWith({ text: "喜欢短回复" });
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ embedding: [0.1, 0.2, 0.3] }),
+    );
+  });
+
+  it("automatically embeds replacement writes without replacing an explicit vector", async () => {
+    const existing: MemoryRecord = {
+      id: "m1", userId: "u1", companionId: "c1", kind: "fact",
+      content: "旧内容", importance: 0.5, relationshipRelevance: 0,
+      projectRelevance: 0, createdAt: "2026-09-30T00:00:00Z",
+    };
+    const repository: MemoryRepository = {
+      create: vi.fn(),
+      replace: vi.fn(async (input) => ({
+        ...existing,
+        content: input.update.content,
+      })),
+      remove: vi.fn(),
+      findCandidates: vi.fn(async () => []),
+      markAccessed: vi.fn(),
+    };
+    const embed = vi.fn(async () => ({
+      providerId: "test-provider",
+      vector: [0.4, 0.5, 0.6],
+    }));
+    const service = createMemoryService(repository, { id: "test-provider", embed });
+
+    await service.replace({
+      userId: "u1",
+      companionId: "c1",
+      memoryId: "m1",
+      update: {
+        userId: "u1",
+        companionId: "c1",
+        kind: "fact",
+        content: "新内容",
+      },
+    });
+
+    expect(embed).toHaveBeenCalledWith({ text: "新内容" });
+    expect(repository.replace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ embedding: [0.4, 0.5, 0.6] }),
+      }),
+    );
+  });
+
 });
