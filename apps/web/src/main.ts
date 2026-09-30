@@ -29,7 +29,7 @@ const renderLoop = new AvatarRenderLoop(
     cancel: (handle) => cancelAnimationFrame(handle),
   },
   lipSync,
-  () => renderer.render(runtime.getState()),
+  () => runtime.render(),
 );
 renderLoop.start();
 
