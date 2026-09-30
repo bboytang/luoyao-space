@@ -1,22 +1,25 @@
 import type { CapabilityDefinition, CapabilityResult } from "../../../packages/protocol/src/capabilities";
 import type { DeviceIdentity } from "../../../packages/protocol/src/identity";
 import type { AgentTask } from "../../../packages/protocol/src/tasks";
-import { transition } from "./state-machine";
+import { TaskConcurrencyError, type TaskRepository } from "./repository";
+import { TaskLifecycleService } from "./lifecycle";
 import {
-  executeTaskStep,
-  type ExecuteTaskStepInput,
-} from "./task-executor";
-import { requestUserInput } from "./task-control";
+  executeDurableTaskStep,
+  type ExecuteDurableTaskInput,
+} from "./durable-runner";
 
 export interface ExecuteTaskInput {
   task: AgentTask;
   device: DeviceIdentity;
+  repository: TaskRepository;
+  lifecycle: TaskLifecycleService;
   resolveCapability: (
     capabilityId: string,
   ) => CapabilityDefinition | undefined;
-  permission: ExecuteTaskStepInput["permission"];
-  backend: ExecuteTaskStepInput["backend"];
+  permission: ExecuteDurableTaskInput["permission"];
+  backend: ExecuteDurableTaskInput["backend"];
   createInvocationId?: (task: AgentTask) => string;
+  leaseDurationMs?: number;
   now?: string;
 }
 
@@ -28,14 +31,60 @@ export interface TaskExecutionResult {
 export async function executeTask(
   input: ExecuteTaskInput,
 ): Promise<TaskExecutionResult> {
-  let task = cloneTask(input.task);
+  validateExecutionTarget(input.task, input.device);
+
+  const persisted = await input.repository.get({
+    taskId: input.task.taskId,
+    userId: input.task.userId,
+    companionId: input.task.companionId,
+  });
+
+  if (!persisted) {
+    throw new Error("Task not found");
+  }
+
+  if (persisted.version !== input.task.version) {
+    throw new TaskConcurrencyError();
+  }
+
+  let task = persisted;
   const stepResults: CapabilityResult[] = [];
 
+  while (task.status === "RUNNING") {
+    const result = await executeDurableTaskStep({
+      taskId: task.taskId,
+      userId: task.userId,
+      companionId: task.companionId,
+      device: input.device,
+      repository: input.repository,
+      lifecycle: input.lifecycle,
+      resolveCapability: input.resolveCapability,
+      permission: input.permission,
+      backend: input.backend,
+      invocationId: input.createInvocationId,
+      leaseDurationMs: input.leaseDurationMs,
+      now: input.now,
+    });
+
+    if (result.stepResult) {
+      stepResults.push(result.stepResult);
+    }
+
+    task = result.task;
+  }
+
+  return { task, stepResults };
+}
+
+function validateExecutionTarget(
+  task: AgentTask,
+  device: DeviceIdentity,
+): void {
   if (task.status !== "RUNNING") {
     throw new Error(`Task must be RUNNING to execute, got ${task.status}`);
   }
 
-  if (!input.device.deviceId.trim()) {
+  if (!device.deviceId.trim()) {
     throw new Error("Task execution requires a target device");
   }
 
@@ -43,86 +92,7 @@ export async function executeTask(
     throw new Error("Task must be bound to a target device");
   }
 
-  if (task.deviceId !== input.device.deviceId) {
+  if (task.deviceId !== device.deviceId) {
     throw new Error("Task target device does not match execution device");
   }
-
-  while (task.currentStep < task.plan.length) {
-    const step = task.plan[task.currentStep];
-    const capability = input.resolveCapability(step.capabilityId);
-
-    if (!capability) {
-      task = failTask(task, `capability_not_found:${step.capabilityId}`, input.now);
-      return { task, stepResults };
-    }
-
-    const result = await executeTaskStep({
-      task,
-      capability,
-      device: input.device,
-      permission: input.permission,
-      backend: input.backend,
-      invocationId: input.createInvocationId?.(task),
-    });
-
-    stepResults.push(result);
-
-    if (!result.ok) {
-      if (result.error?.code === "USER_INPUT_REQUIRED") {
-        task = requestUserInput(task, input.now);
-        return { task, stepResults };
-      }
-
-      task = failTask(
-        task,
-        result.error?.message ?? "task_step_execution_failed",
-        input.now,
-      );
-      return { task, stepResults };
-    }
-
-    const nextStep = task.currentStep + 1;
-    const nextStatus =
-      nextStep >= task.plan.length
-        ? transition(task.status, "COMPLETED")
-        : task.status;
-
-    task = {
-      ...task,
-      currentStep: nextStep,
-      status: nextStatus,
-      version: task.version + 1,
-      ...(nextStatus === "COMPLETED" ? { result: stepResults.map(getOutput) } : {}),
-      updatedAt: input.now ?? new Date().toISOString(),
-    };
-  }
-
-  return { task, stepResults };
-}
-
-function failTask(task: AgentTask, error: string, now?: string): AgentTask {
-  return {
-    ...task,
-    status: transition(task.status, "FAILED"),
-    error,
-    version: task.version + 1,
-    updatedAt: now ?? new Date().toISOString(),
-  };
-}
-
-function getOutput(result: CapabilityResult): unknown {
-  return result.output;
-}
-
-function cloneTask(task: AgentTask): AgentTask {
-  return {
-    ...task,
-    plan: task.plan.map((step) => ({
-      ...step,
-      requiredPermissions: [...step.requiredPermissions],
-    })),
-    ...(task.executionContext
-      ? { executionContext: { ...task.executionContext } }
-      : {}),
-  };
 }
