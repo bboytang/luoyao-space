@@ -19,6 +19,7 @@ const task: AgentTask = {
   }],
   currentStep: 0,
   requiresApproval: false,
+  version: 1,
   deviceId: "desktop-1",
   createdAt: "2026-09-30T00:00:00.000Z",
   updatedAt: "2026-09-30T00:00:00.000Z",
