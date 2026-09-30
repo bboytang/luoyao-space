@@ -5,8 +5,13 @@ import { WebSocketTransport, type WebSocketLike } from "../../../runtimes/realti
 import { RealtimeAvatarController } from "./realtime-avatar-controller";
 import { AvatarRuntime } from "../../../runtimes/avatar/src/runtime";
 
+export interface RealtimeClientSocket extends WebSocketLike {
+  waitForOpen(): Promise<void>;
+}
+
 export interface RealtimeClientOptions {
   url: string;
+  socket?: RealtimeClientSocket;
   avatar: AvatarRuntime;
   input: RealtimeAudioInput;
   output: RealtimeAudioOutput;
@@ -74,7 +79,7 @@ function createSessionId(): string {
 }
 
 export class RealtimeClient {
-  private readonly socket: BrowserWebSocket;
+  private readonly socket: RealtimeClientSocket;
   private readonly transport: WebSocketTransport;
   private readonly avatarController: RealtimeAvatarController;
   private readonly input: RealtimeAudioInput;
@@ -86,7 +91,7 @@ export class RealtimeClient {
   private closed = false;
 
   constructor(options: RealtimeClientOptions) {
-    this.socket = new BrowserWebSocket(options.url);
+    this.socket = options.socket ?? new BrowserWebSocket(options.url);
     this.transport = new WebSocketTransport(this.socket, binaryAudioCodec);
     this.input = options.input;
     this.output = options.output;
@@ -120,6 +125,7 @@ export class RealtimeClient {
   readonly deviceId?: string;
 
   async connect(): Promise<void> {
+    if (this.closed) throw new Error("RealtimeClient is closed");
     await this.socket.waitForOpen();
     await this.transport.send({
       type: "hello",
@@ -131,6 +137,7 @@ export class RealtimeClient {
   }
 
   async startListening(): Promise<void> {
+    if (this.closed) throw new Error("RealtimeClient is closed");
     if (this.listening) return;
     await this.input.start((frame: AudioFrame) => void this.transport.sendAudio(frame));
     await this.transport.send({
@@ -141,6 +148,7 @@ export class RealtimeClient {
   }
 
   async stopListening(): Promise<void> {
+    if (this.closed) return;
     if (!this.listening) return;
     this.listening = false;
     await this.transport.send({
@@ -151,6 +159,7 @@ export class RealtimeClient {
   }
 
   async abort(): Promise<void> {
+    if (this.closed) return;
     this.listening = false;
     await this.input.stop();
     await this.output.stop();
