@@ -3,6 +3,7 @@ import { rankMemories, type MemoryRecord, type RankedMemory } from "./ranking";
 import { validateEmbedding, type EmbeddingProvider } from "./embedding";
 import { decideMemoryWrite, type MemoryWriteSignals } from "./write-policy";
 import type { CreateMemoryInput, MemoryRepository } from "./repository";
+import type { MemoryObservability } from "./observability";
 
 export interface MemoryEventSink {
   emit(event: {
@@ -61,7 +62,13 @@ export function createMemoryService(
   repository: MemoryRepository,
   embedding?: EmbeddingProvider,
   events?: MemoryEventSink,
+  observability?: MemoryObservability,
 ): MemoryService {
+  const metrics: MemoryObservability = observability ?? {
+    increment() {},
+    observe() {},
+  };
+
   async function emit(event: Parameters<MemoryEventSink["emit"]>[0]): Promise<void> {
     if (events) await events.emit(event);
   }
@@ -83,7 +90,9 @@ export function createMemoryService(
 
   return {
     async remember(input) {
-      const vector = await resolveEmbedding(input.content, input.embedding);
+      const startedAt = Date.now();
+      try {
+        const vector = await resolveEmbedding(input.content, input.embedding);
       const persistedInput: CreateMemoryInput = {
         ...input,
         ...(vector ? { embedding: vector } : {}),
@@ -95,7 +104,14 @@ export function createMemoryService(
         companionId: memory.companionId,
         data: { memoryId: memory.id, kind: memory.kind, importance: memory.importance },
       });
-      return memory;
+        metrics.increment("memory_write_success", 1, { operation: "remember" });
+        metrics.observe("memory_write_duration_ms", Date.now() - startedAt, { operation: "remember" });
+        return memory;
+      } catch (error) {
+        metrics.increment("memory_write_failure", 1, { operation: "remember" });
+        metrics.observe("memory_write_duration_ms", Date.now() - startedAt, { operation: "remember" });
+        throw error;
+      }
     },
 
     async rememberCandidate(input) {
@@ -174,7 +190,9 @@ export function createMemoryService(
     },
 
     async replace(input) {
-      const vector = await resolveEmbedding(input.update.content, input.update.embedding);
+      const startedAt = Date.now();
+      try {
+        const vector = await resolveEmbedding(input.update.content, input.update.embedding);
       const persistedUpdate: CreateMemoryInput = {
         ...input.update,
         ...(vector ? { embedding: vector } : {}),
@@ -189,21 +207,39 @@ export function createMemoryService(
         companionId: memory.companionId,
         data: { memoryId: memory.id, kind: memory.kind, importance: memory.importance },
       });
-      return memory;
+        metrics.increment("memory_write_success", 1, { operation: "replace" });
+        metrics.observe("memory_write_duration_ms", Date.now() - startedAt, { operation: "replace" });
+        return memory;
+      } catch (error) {
+        metrics.increment("memory_write_failure", 1, { operation: "replace" });
+        metrics.observe("memory_write_duration_ms", Date.now() - startedAt, { operation: "replace" });
+        throw error;
+      }
     },
 
     async remove(input) {
-      await repository.remove(input);
+      const startedAt = Date.now();
+      try {
+        await repository.remove(input);
       await emit({
         type: "memory.deleted",
         userId: input.userId,
         companionId: input.companionId,
         data: { memoryId: input.memoryId },
       });
+        metrics.increment("memory_write_success", 1, { operation: "remove" });
+        metrics.observe("memory_write_duration_ms", Date.now() - startedAt, { operation: "remove" });
+      } catch (error) {
+        metrics.increment("memory_write_failure", 1, { operation: "remove" });
+        metrics.observe("memory_write_duration_ms", Date.now() - startedAt, { operation: "remove" });
+        throw error;
+      }
     },
 
     async recall(input) {
-      const queryEmbedding = embedding
+      const startedAt = Date.now();
+      try {
+        const queryEmbedding = embedding
         ? (await embedding.embed({ text: input.query })).vector
         : undefined;
 
@@ -234,7 +270,20 @@ export function createMemoryService(
         );
       }
 
-      return ranked;
+        metrics.increment("memory_recall_success", 1, {
+          result: ranked.length > 0 ? "hit" : "empty",
+        });
+        metrics.observe("memory_recall_duration_ms", Date.now() - startedAt, {
+          result: ranked.length > 0 ? "hit" : "empty",
+        });
+        metrics.observe("memory_recall_candidate_count", candidates.length);
+        metrics.observe("memory_recall_result_count", ranked.length);
+        return ranked;
+      } catch (error) {
+        metrics.increment("memory_recall_failure");
+        metrics.observe("memory_recall_duration_ms", Date.now() - startedAt);
+        throw error;
+      }
     },
   };
 }
