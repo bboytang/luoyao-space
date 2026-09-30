@@ -45,17 +45,17 @@ describe("WebSocketSessionConnection", () => {
     const controls: unknown[] = [];
     const audio: AudioFrame[] = [];
 
-    connection.onControl((message) => controls.push(message));
-    connection.onAudio((value) => audio.push(value));
+    connection.onControl((message) => { controls.push(message); });
+    connection.onAudio((value) => { audio.push(value); });
 
-    await connection.receive(JSON.stringify({
+    await socket.receive(JSON.stringify({
       type: "hello",
       version: 1,
       sessionId: "session-1",
     }));
 
     const encoded = (await import("../../../runtimes/realtime-device/src/binary-audio-codec")).binaryAudioCodec.encodeAudio(frame);
-    await connection.receive(encoded);
+    await socket.receive(encoded);
 
     expect(controls).toEqual([{
       type: "hello",
