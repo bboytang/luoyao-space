@@ -40,4 +40,12 @@ describe("RealtimeAvatarController", () => {
     expect(avatar.getState().speaking).toBe(false);
   });
 
-  it("marks the avatar as speaking when audio arrives", () => {\n    const avatar = createAvatar();\n    const controller = new RealtimeAvatarController({ avatar });\n\n    controller.handleAudioFrame();\n\n    expect(avatar.getState().speaking).toBe(true);\n  });\n});\n
+  it("marks the avatar as speaking when audio arrives", () => {
+    const avatar = createAvatar();
+    const controller = new RealtimeAvatarController({ avatar });
+
+    controller.handleAudioFrame();
+
+    expect(avatar.getState().speaking).toBe(true);
+  });
+});
