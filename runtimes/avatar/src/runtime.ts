@@ -9,6 +9,7 @@ export interface AvatarState {
   expression: AvatarEmotionEventData["expression"];
   activity: AvatarActivity;
   speaking: boolean;
+  mouthOpen: number;
   updatedAt: number;
 }
 
@@ -49,6 +50,13 @@ export class AvatarRuntime {
 
   setActivity(activity: AvatarActivity): Readonly<AvatarState> {
     this.state = { ...this.state, activity, speaking: activity === "speaking", updatedAt: this.clock() };
+    this.renderer.render(this.state);
+    return this.state;
+  }
+
+  setMouthOpen(mouthOpen: number): Readonly<AvatarState> {
+    const normalized = Number.isFinite(mouthOpen) ? Math.min(1, Math.max(0, mouthOpen)) : 0;
+    this.state = { ...this.state, mouthOpen: normalized, updatedAt: this.clock() };
     this.renderer.render(this.state);
     return this.state;
   }
