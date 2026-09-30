@@ -216,7 +216,7 @@ describe("executeDurableTaskStep", () => {
       device, repository, lifecycle, resolveCapability, permission,
       backend: { execute: async () => ({ ok: true }) },
       now: "2026-09-30T01:00:01.000Z",
-    })).rejects.toMatchObject({ code: "TASK_CONCURRENCY_CONFLICT" });
+    })).rejects.toMatchObject({ code: "TASK_EXECUTION_LEASE_UNAVAILABLE" });
 
     expect(calls).toBe(1);
     release();
