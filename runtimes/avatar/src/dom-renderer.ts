@@ -1,6 +1,7 @@
 import type { AvatarRenderer, AvatarState } from "./runtime";
 import { toAvatarRenderModel } from "./render-model";
 import { LUOYAO_AVATAR_CSS } from "./avatar-css";
+import { toAvatarMotion } from "./motion";
 
 export interface DomAvatarRendererOptions {
   root: HTMLElement;
@@ -45,6 +46,11 @@ export class DomAvatarRenderer implements AvatarRenderer {
     this.character.style.setProperty("--avatar-mouth-open", String(model.mouthOpen));
     this.character.style.setProperty("--avatar-gaze-x", String(model.gaze.x));
     this.character.style.setProperty("--avatar-gaze-y", String(model.gaze.y));
+    const motion = toAvatarMotion(model, performance.now() / 1000);
+    this.character.style.setProperty("--avatar-head-tilt", String(motion.headTilt));
+    this.character.style.setProperty("--avatar-body-offset-y", String(motion.bodyOffsetY));
+    this.character.style.setProperty("--avatar-body-rotation", String(motion.bodyRotation));
+    this.character.style.setProperty("--avatar-gesture-scale", String(motion.gestureScale));
     this.character.setAttribute("aria-label", `Luoyao ${model.activity}`);
     this.status.textContent = model.speaking ? "speaking" : model.activity;
   }
