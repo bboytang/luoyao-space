@@ -39,6 +39,82 @@ button("好奇", () => runtime.applyEmotion({
   expression: "curious",
 }));
 
+const realtimePanel = document.createElement("div");
+realtimePanel.className = "realtime-panel";
+const realtimeUrl = document.createElement("input");
+realtimeUrl.type = "url";
+realtimeUrl.placeholder = "wss://你的实时服务地址";
+realtimeUrl.setAttribute("aria-label", "Realtime WebSocket 地址");
+const realtimeStatus = document.createElement("span");
+realtimeStatus.textContent = "未连接";
+const connectButton = document.createElement("button");
+connectButton.type = "button";
+connectButton.textContent = "连接实时服务";
+const listenButton = document.createElement("button");
+listenButton.type = "button";
+listenButton.textContent = "开始说话";
+listenButton.disabled = true;
+const stopButton = document.createElement("button");
+stopButton.type = "button";
+stopButton.textContent = "停止";
+stopButton.disabled = true;
+realtimePanel.append(realtimeUrl, connectButton, listenButton, stopButton, realtimeStatus);
+
+const capture = new BrowserPcmCapture();
+const playback = new BrowserPcmPlayback();
+let realtimeClient: RealtimeClient | undefined;
+
+connectButton.addEventListener("click", async () => {
+  if (realtimeClient) {
+    await realtimeClient.close();
+    realtimeClient = undefined;
+    connectButton.textContent = "连接实时服务";
+    listenButton.disabled = true;
+    stopButton.disabled = true;
+    realtimeStatus.textContent = "未连接";
+    return;
+  }
+
+  const url = realtimeUrl.value.trim();
+  if (!url) {
+    realtimeStatus.textContent = "请先填写 WebSocket 地址";
+    return;
+  }
+
+  try {
+    realtimeStatus.textContent = "连接中…";
+    realtimeClient = new RealtimeClient({ url, avatar: runtime, input: capture, output: playback });
+    await realtimeClient.connect();
+    connectButton.textContent = "断开";
+    listenButton.disabled = false;
+    realtimeStatus.textContent = "已连接";
+  } catch (error) {
+    await realtimeClient?.close().catch(() => undefined);
+    realtimeClient = undefined;
+    realtimeStatus.textContent = error instanceof Error ? error.message : "连接失败";
+  }
+});
+
+listenButton.addEventListener("click", async () => {
+  if (!realtimeClient) return;
+  try {
+    await realtimeClient.startListening();
+    listenButton.disabled = true;
+    stopButton.disabled = false;
+    realtimeStatus.textContent = "正在倾听";
+  } catch (error) {
+    realtimeStatus.textContent = error instanceof Error ? error.message : "麦克风启动失败";
+  }
+});
+
+stopButton.addEventListener("click", async () => {
+  if (!realtimeClient) return;
+  await realtimeClient.stopListening();
+  listenButton.disabled = false;
+  stopButton.disabled = true;
+  realtimeStatus.textContent = "已停止";
+});
+
 const title = document.createElement("h1");
 title.textContent = "Luoyao Space";
 const subtitle = document.createElement("p");
