@@ -5,61 +5,38 @@ import { TransportProtocolError } from "./transport";
 describe("jsonCodec", () => {
   it("decodes a valid server message", () => {
     expect(
-      jsonCodec.decodeControl(
-        JSON.stringify({
-          type: "hello",
-          version: 1,
-          sessionId: "session-1",
-          deviceId: "device-1",
-          capabilities: ["audio"],
-        }),
-      ),
+      jsonCodec.decodeControl(JSON.stringify({
+        type: "ready",
+        sessionId: "session-1",
+        state: "ready",
+        serverTime: "2026-01-01T00:00:00.000Z",
+      })),
     ).toEqual({
-      type: "hello",
-      version: 1,
+      type: "ready",
       sessionId: "session-1",
-      deviceId: "device-1",
-      capabilities: ["audio"],
+      state: "ready",
+      serverTime: "2026-01-01T00:00:00.000Z",
     });
   });
 
   it("rejects malformed JSON", () => {
-    expect(() => jsonCodec.decodeControl("{")).toThrow(
+    expect(() => jsonCodec.decodeControl("{")).toThrow(TransportProtocolError);
+  });
+
+  it("rejects unknown message types", () => {
+    expect(() => jsonCodec.decodeControl(JSON.stringify({ type: "unknown" }))).toThrow(
       TransportProtocolError,
     );
   });
 
-  it("rejects unknown message types", () => {
-    expect(() =>
-      jsonCodec.decodeControl(JSON.stringify({ type: "unknown" })),
-    ).toThrow(TransportProtocolError);
-  });
-
   it("rejects client-only control messages", () => {
     expect(() =>
-      jsonCodec.decodeControl(
-        JSON.stringify({ type: "listen", mode: "start" }),
-      ),
+      jsonCodec.decodeControl(JSON.stringify({ type: "listen", mode: "start" })),
     ).toThrow(TransportProtocolError);
   });
 
-  it("rejects unknown server messages", () => {
-    expect(() =>
-      jsonCodec.decodeControl(
-        JSON.stringify({ type: "abort", reason: "unknown" }),
-      ),
-    ).toThrow(TransportProtocolError);
-  });
-
-  it("round-trips a client control message", () => {
-    const message = {
-      type: "tts",
-      state: "sentence_start",
-      messageId: "message-1",
-      sentence: "你好",
-      index: 0,
-    } as const;
-
+  it("encodes a client control message", () => {
+    const message = { type: "listen", mode: "start" } as const;
     expect(JSON.parse(jsonCodec.encodeControl(message))).toEqual(message);
   });
 });
