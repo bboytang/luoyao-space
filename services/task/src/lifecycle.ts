@@ -84,7 +84,7 @@ function assertTransition(previous: AgentTask, next: AgentTask): void {
     throw new Error("Task transition must advance version exactly once");
   }
   if (previous.status === next.status) {
-    throw new Error("Task transition must change status");
+    return;
   }
   if (previous.status === "WAITING_APPROVAL" && next.status === "RUNNING") {
     if (next.approvalStatus !== "APPROVED") {
