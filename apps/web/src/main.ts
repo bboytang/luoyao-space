@@ -55,10 +55,15 @@ style.textContent = `
   h1, p { margin: 0; }
   p { opacity: .7; }
   .avatar-root { min-height: 300px; display: grid; place-items: center; }
-  .realtime-panel { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 720px; align-items: center; }\n  .realtime-panel input { min-width: 280px; border: 1px solid #3b3f4a; border-radius: 999px; padding: 8px 14px; background: #1c2029; color: inherit; }\n  .controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 520px; }
+  .realtime-panel { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 720px; align-items: center; }
+  .realtime-panel input { min-width: 280px; border: 1px solid #3b3f4a; border-radius: 999px; padding: 8px 14px; background: #1c2029; color: inherit; }
+  .controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 520px; }
   button { border: 1px solid #3b3f4a; border-radius: 999px; padding: 8px 14px; background: #1c2029; color: inherit; cursor: pointer; }
   button:hover { background: #272c37; }
 `;
 document.head.appendChild(style);
 
-window.addEventListener("pagehide", () => {\n  void realtimeClient?.close();\n  runtime.dispose();\n});
+window.addEventListener("pagehide", () => {
+  void realtimeClient?.close();
+  runtime.dispose();
+});
