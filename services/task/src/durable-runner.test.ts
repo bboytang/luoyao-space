@@ -186,15 +186,15 @@ describe("executeDurableTaskStep", () => {
     expect(result.task.executionLeaseId).toBeUndefined();
     expect(events.events.at(-1)?.type).toBe("task.waiting_user");
   });
-});
-
 
   it("does not execute the same step concurrently", async () => {
     const { repository, lifecycle } = setup();
     await lifecycle.create(task);
     let calls = 0;
     let release!: () => void;
-    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
 
     const first = executeDurableTaskStep({
       taskId: "task-1", userId: "user-1", companionId: "luoyao",
@@ -216,9 +216,10 @@ describe("executeDurableTaskStep", () => {
       device, repository, lifecycle, resolveCapability, permission,
       backend: { execute: async () => ({ ok: true }) },
       now: "2026-09-30T01:00:01.000Z",
-    })).rejects.toMatchObject({ code: "TASK_EXECUTION_LEASE_UNAVAILABLE" });
+    })).rejects.toMatchObject({ code: "TASK_CONCURRENCY_CONFLICT" });
 
     expect(calls).toBe(1);
     release();
     await first;
   });
+});
