@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { EMBEDDING_DIMENSION } from "./embedding";
 import { createMemoryService } from "./service";
 import type { MemoryRepository } from "./repository";
 
@@ -16,7 +17,7 @@ describe("MemoryService embeddings", () => {
       id: "test-embedding",
       embed: vi.fn(async () => ({
         providerId: "test-embedding",
-        vector: [0.1, 0.2, 0.3],
+        vector: Array.from({ length: EMBEDDING_DIMENSION }, (_, index) => index / EMBEDDING_DIMENSION),
       })),
     };
 
@@ -34,7 +35,7 @@ describe("MemoryService embeddings", () => {
     expect(findCandidates).toHaveBeenCalledWith(
       expect.objectContaining({
         query: "project",
-        queryEmbedding: [0.1, 0.2, 0.3],
+        queryEmbedding: Array.from({ length: EMBEDDING_DIMENSION }, (_, index) => index / EMBEDDING_DIMENSION),
       }),
     );
   });
@@ -52,7 +53,11 @@ describe("MemoryService embeddings", () => {
       id: "bad",
       embed: vi.fn(async () => ({
         providerId: "bad",
-        vector: [Number.NaN],
+        vector: (() => {
+          const vector = Array(EMBEDDING_DIMENSION).fill(0);
+          vector[0] = Number.NaN;
+          return vector;
+        })(),
       })),
     };
     const service = createMemoryService(repository, embedding);
