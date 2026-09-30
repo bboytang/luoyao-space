@@ -54,6 +54,22 @@ describe("RealtimeAvatarController", () => {
     expect(getSpeaking()).toBe(true);
   });
 
+  it("ignores stale audio after abort until a new tts turn starts", () => {
+    const { avatar, getSpeaking } = createAvatar();
+    const controller = new RealtimeAvatarController(avatar);
+
+    controller.handleServerMessage({ type: "tts", state: "start", messageId: "m1" });
+    controller.handleAborted();
+    controller.handleAudioFrame();
+
+    expect(getSpeaking()).toBe(false);
+
+    controller.handleServerMessage({ type: "tts", state: "start", messageId: "m2" });
+    controller.handleAudioFrame();
+
+    expect(getSpeaking()).toBe(true);
+  });
+
   it("marks the avatar as speaking when audio arrives", () => {
     const { avatar, getSpeaking } = createAvatar();
     const controller = new RealtimeAvatarController(avatar);
