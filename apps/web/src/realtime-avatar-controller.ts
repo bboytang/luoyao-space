@@ -1,9 +1,8 @@
 import { AvatarRuntime } from "../../../runtimes/avatar/src/runtime";
-import type { AudioFrame, RealtimeServerMessage } from "../../../runtimes/realtime-device/src/protocol";
+import type { RealtimeServerMessage } from "../../../runtimes/realtime-device/src/protocol";
 
 export interface RealtimeAvatarControllerOptions {
   avatar: AvatarRuntime;
-  onAudio?: (frame: AudioFrame) => void;
 }
 
 /**
@@ -12,11 +11,9 @@ export interface RealtimeAvatarControllerOptions {
  */
 export class RealtimeAvatarController {
   private readonly avatar: AvatarRuntime;
-  private readonly onAudio?: (frame: AudioFrame) => void;
 
   constructor(options: RealtimeAvatarControllerOptions) {
     this.avatar = options.avatar;
-    this.onAudio = options.onAudio;
   }
 
   handleServerMessage(message: RealtimeServerMessage): void {
@@ -43,9 +40,8 @@ export class RealtimeAvatarController {
     }
   }
 
-  handleAudioFrame(frame: AudioFrame): void {
+  handleAudioFrame(): void {
     this.avatar.setSpeaking(true);
-    this.onAudio?.(frame);
   }
 
   handleClosed(): void {
