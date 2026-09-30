@@ -75,6 +75,7 @@ describe("OpenAiAsrProvider", () => {
     const first = iterator.next();
 
     socket.emit("open", {});
+    await Promise.resolve();
 
     const sessionUpdate = JSON.parse(socket.sent[0]);
     expect(sessionUpdate).toEqual({
