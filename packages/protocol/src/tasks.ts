@@ -9,13 +9,23 @@ export type TaskStatus =
   | "PAUSED"
   | "CANCELLED";
 
+export interface TaskPlanStep {
+  id: string;
+  capabilityId: string;
+  description: string;
+  risk: "L0" | "L1" | "L2" | "L3";
+  requiredPermissions: string[];
+  requiresApproval: boolean;
+  input: unknown;
+}
+
 export interface AgentTask {
   taskId: string;
   userId: string;
   companionId: string;
   goal: string;
   status: TaskStatus;
-  plan: string[];
+  plan: TaskPlanStep[];
   currentStep: number;
   requiresApproval: boolean;
   approvalStatus?: "PENDING" | "APPROVED" | "REJECTED";
