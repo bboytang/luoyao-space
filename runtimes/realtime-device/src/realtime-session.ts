@@ -1,6 +1,7 @@
 import type { RealtimeAudioInput, RealtimeAudioOutput } from "./audio-io";
 import type { AudioFrame, RealtimeServerMessage } from "./protocol";
 import type { RealtimeTransport } from "./transport";
+import { DEFAULT_REALTIME_CAPABILITIES, type RealtimeCapability } from "./capabilities";
 
 export type RealtimeSessionState = "connecting" | "connected" | "closed";
 
@@ -19,7 +20,7 @@ export interface RealtimeSessionOptions {
   avatar: RealtimeAvatarControllerPort;
   sessionId: string;
   deviceId?: string;
-  capabilities?: string[];
+  capabilities?: RealtimeCapability[];
   onStateChange?: (state: RealtimeSessionState) => void;
 }
 
@@ -47,7 +48,7 @@ export class RealtimeSession {
     this.avatar = options.avatar;
     this.sessionId = options.sessionId;
     this.deviceId = options.deviceId;
-    this.capabilities = options.capabilities;
+    this.capabilities = options.capabilities ?? DEFAULT_REALTIME_CAPABILITIES;
     this.onStateChange = options.onStateChange;
 
     this.removeMessage = this.transport.onMessage((message) => {

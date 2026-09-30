@@ -106,7 +106,6 @@ export class RealtimeClient {
       avatar: avatarController,
       sessionId: this.sessionId,
       deviceId: this.deviceId,
-      capabilities: ["audio.pcm_s16le", "avatar.dynamic"],
       onStateChange: options.onStateChange,
     });
   }
