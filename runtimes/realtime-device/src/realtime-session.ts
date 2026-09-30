@@ -37,11 +37,14 @@ export class RealtimeSession {
   private removeAudio?: () => void;
   private removeClose?: () => void;
   private listening = false;
+  private inputStarted = false;
   private closed = false;
   private closePromise?: Promise<void>;
+  private abortPromise?: Promise<void>;
   private connectPromise?: Promise<void>;
   private startListeningPromise?: Promise<void>;
   private stopListeningPromise?: Promise<void>;
+  private inputStopPromise?: Promise<void>;
   private state: RealtimeClientSessionState = "closed";
 
   constructor(options: RealtimeSessionOptions) {
@@ -76,7 +79,7 @@ export class RealtimeSession {
       this.setState("closed");
       this.detachTransportHandlers();
       this.avatar.handleClosed();
-      void this.input.stop().catch(() => {});
+      void this.stopInput().catch(() => {});
       void this.output.stop().catch(() => {});
     });
   }
@@ -126,14 +129,15 @@ export class RealtimeSession {
 
     this.startListeningPromise = (async () => {
       await this.input.start((frame: AudioFrame) => void this.transport.sendAudio(frame));
+      this.inputStarted = true;
       if (this.closed) {
-        await this.input.stop();
+        await this.stopInput();
         return;
       }
 
       await this.transport.send({ type: "listen", mode: "start" });
       if (this.closed) {
-        await this.input.stop();
+        await this.stopInput();
         return;
       }
 
@@ -161,7 +165,7 @@ export class RealtimeSession {
     this.stopListeningPromise = (async () => {
       this.listening = false;
       await this.transport.send({ type: "listen", mode: "stop" });
-      await this.input.stop();
+      await this.stopInput();
     })();
 
     try {
@@ -173,14 +177,31 @@ export class RealtimeSession {
 
   async abort(): Promise<void> {
     if (this.closed) return;
+    if (this.abortPromise) {
+      await this.abortPromise;
+      return;
+    }
 
-    this.listening = false;
-    await this.input.stop();
-    await this.output.stop();
-    this.avatar.handleClosed();
+    this.abortPromise = (async () => {
+      await this.startListeningPromise?.catch(() => {});
+      await this.stopListeningPromise?.catch(() => {});
 
-    if (this.closed) return;
-    await this.transport.send({ type: "abort", reason: "user_cancel" });
+      if (this.closed) return;
+
+      this.listening = false;
+      await this.stopInput();
+      await this.output.stop();
+      this.avatar.handleClosed();
+
+      if (this.closed) return;
+      await this.transport.send({ type: "abort", reason: "user_cancel" });
+    })();
+
+    try {
+      await this.abortPromise;
+    } finally {
+      this.abortPromise = undefined;
+    }
   }
 
   async close(): Promise<void> {
@@ -195,12 +216,57 @@ export class RealtimeSession {
     this.detachTransportHandlers();
 
     this.closePromise = (async () => {
-      await this.input.stop();
-      await this.output.stop();
-      await this.transport.close(1000, "client closed");
+      let cleanupError: unknown;
+
+      try {
+        await this.transport.close(1000, "client closed");
+      } catch (error) {
+        cleanupError = error;
+      }
+
+      const lifecycleOperations = [
+        this.connectPromise,
+        this.startListeningPromise,
+        this.stopListeningPromise,
+      ].filter((promise): promise is Promise<void> => promise !== undefined);
+
+      await Promise.allSettled(lifecycleOperations);
+
+      try {
+        await this.stopInput();
+      } catch (error) {
+        cleanupError ??= error;
+      }
+
+      try {
+        await this.output.stop();
+      } catch (error) {
+        cleanupError ??= error;
+      }
+
+      if (cleanupError !== undefined) throw cleanupError;
     })();
 
     await this.closePromise;
+  }
+
+  private async stopInput(): Promise<void> {
+    if (!this.inputStarted) return;
+    if (this.inputStopPromise) {
+      await this.inputStopPromise;
+      return;
+    }
+
+    this.inputStopPromise = (async () => {
+      await this.input.stop();
+      this.inputStarted = false;
+    })();
+
+    try {
+      await this.inputStopPromise;
+    } finally {
+      this.inputStopPromise = undefined;
+    }
   }
 
   private detachTransportHandlers(): void {
