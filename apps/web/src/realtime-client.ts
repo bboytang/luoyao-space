@@ -104,18 +104,20 @@ export class RealtimeClient {
       this.avatarController.handleServerMessage(message);
       if (message.type === "tts" && message.state === "stop") {
         const epoch = this.avatarController.getPlaybackEpoch();
-        void this.output.waitForIdle?.().then(() => this.avatarController.handlePlaybackIdle(epoch));
+        void this.output.waitForIdle?.()
+          .then(() => this.avatarController.handlePlaybackIdle(epoch))
+          .catch(() => {});
       }
     });
     this.removeAudio = this.transport.onAudio((frame) => {
       this.avatarController.handleAudioFrame();
-      void this.output.play(frame);
+      void this.output.play(frame).catch(() => {});
     });
     this.removeClose = this.transport.onClose(() => {
       this.listening = false;
       this.avatarController.handleClosed();
-      void this.input.stop();
-      void this.output.stop();
+      void this.input.stop().catch(() => {});
+      void this.output.stop().catch(() => {});
     });
 
     this.sessionId = options.sessionId ?? createSessionId();
