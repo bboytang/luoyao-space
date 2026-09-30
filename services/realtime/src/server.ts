@@ -2,9 +2,11 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { RealtimeSessionService } from "./session-service";
 import { WebSocketSessionConnection } from "./websocket-session-connection";
 import { createDemoRealtimePipeline } from "./demo-pipeline";
+import { loadRealtimeConfig } from "./config";
 
-const port = Number(process.env.REALTIME_PORT ?? 8787);
-const host = process.env.REALTIME_HOST ?? "127.0.0.1";
+const config = loadRealtimeConfig();
+const port = config.port;
+const host = config.host;
 
 const server = new WebSocketServer({ host, port });
 
