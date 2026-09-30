@@ -43,4 +43,15 @@ describe("agent planner", () => {
   it("rejects an empty goal", () => {
     expect(() => createAgentPlan({ goal: "  ", steps: [] }, registry)).toThrow("Planner goal must not be empty");
   });
+
+  it("rejects a plan with no executable steps", () => {
+    expect(() => createAgentPlan({ goal: "没有步骤", steps: [] }, registry)).toThrow("Planner must contain at least one step");
+  });
+
+  it("rejects an empty step description", () => {
+    expect(() => createAgentPlan({
+      goal: "执行任务",
+      steps: [{ capabilityId: "browser.open", description: "  ", input: {} }],
+    }, registry)).toThrow("Planner step description must not be empty");
+  });
 });
