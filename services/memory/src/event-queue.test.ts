@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
 import type { DomainEvent } from "../../../packages/protocol/src/events";
 import { MemoryEventWorker } from "./event-worker";
+import type { MemoryObservability } from "./observability";
 import {
   PostgresMemoryEventQueue,
   type MemoryEventQueue,
@@ -141,6 +142,20 @@ describe("MemoryEventWorker", () => {
     };
   }
 
+  function observabilityStub(): {
+    observability: MemoryObservability;
+    increment: ReturnType<typeof vi.fn>;
+    observe: ReturnType<typeof vi.fn>;
+  } {
+    const increment = vi.fn();
+    const observe = vi.fn();
+    return {
+      observability: { increment, observe },
+      increment,
+      observe,
+    };
+  }
+
   it("processes a claimed memory write and acknowledges it", async () => {
     const claimed = {
       eventId: event().id,
@@ -169,11 +184,14 @@ describe("MemoryEventWorker", () => {
       },
     }));
 
+    const { observability, increment, observe } = observabilityStub();
+
     const worker = new MemoryEventWorker({
       queue,
       memory: { rememberCandidate },
       workerId: "worker-1",
       now: () => "2026-09-30T04:00:02.000Z",
+      observability,
     });
 
     await expect(worker.runOnce()).resolves.toBe(true);
@@ -183,6 +201,17 @@ describe("MemoryEventWorker", () => {
       workerId: "worker-1",
       now: "2026-09-30T04:00:02.000Z",
     });
+    expect(increment).toHaveBeenCalledWith("memory_event_worker_claimed", 1, {
+      event_type: "memory.write.requested",
+    });
+    expect(increment).toHaveBeenCalledWith("memory_event_worker_completed", 1, {
+      event_type: "memory.write.requested",
+    });
+    expect(observe).toHaveBeenCalledWith(
+      "memory_event_worker_processing_duration_ms",
+      0,
+      { event_type: "memory.write.requested" },
+    );
   });
 
   it("requeues failed processing with exponential backoff", async () => {
@@ -201,11 +230,14 @@ describe("MemoryEventWorker", () => {
       throw new Error("temporary memory failure");
     });
 
+    const { observability, increment, observe } = observabilityStub();
+
     const worker = new MemoryEventWorker({
       queue,
       memory: { rememberCandidate },
       workerId: "worker-1",
       now: () => "2026-09-30T04:00:02.000Z",
+      observability,
     });
 
     await expect(worker.runOnce()).rejects.toThrow("temporary memory failure");
@@ -216,5 +248,17 @@ describe("MemoryEventWorker", () => {
       availableAt: "2026-09-30T04:00:04.000Z",
       now: "2026-09-30T04:00:02.000Z",
     });
+    expect(increment).toHaveBeenCalledWith("memory_event_worker_failed", 1, {
+      event_type: "memory.write.requested",
+    });
+    expect(increment).toHaveBeenCalledWith("memory_event_worker_retried", 1, {
+      event_type: "memory.write.requested",
+      attempts: 2,
+    });
+    expect(observe).toHaveBeenCalledWith(
+      "memory_event_worker_processing_duration_ms",
+      0,
+      { event_type: "memory.write.requested" },
+    );
   });
 });
