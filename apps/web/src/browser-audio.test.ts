@@ -65,10 +65,10 @@ describe("browser audio adapters", () => {
   });
 
   it("rolls back failed playback scheduling", async () => {
-    const starts: Array<ReturnType<typeof vi.fn>> = [];
     const sources: Array<{ onended: (() => void) | null; start: ReturnType<typeof vi.fn> }> = [];
 
     class FakeAudioContext {
+      static failNextStart = true;
       currentTime = 10;
       readonly destination = {};
 
@@ -84,8 +84,12 @@ describe("browser audio adapters", () => {
         connect(): void;
         start: ReturnType<typeof vi.fn>;
       } {
-        const start = vi.fn();
-        starts.push(start);
+        const start = vi.fn(() => {
+          if (FakeAudioContext.failNextStart) {
+            FakeAudioContext.failNextStart = false;
+            throw new Error("start failed");
+          }
+        });
         const source = {
           buffer: undefined as unknown,
           onended: null as (() => void) | null,
@@ -110,10 +114,6 @@ describe("browser audio adapters", () => {
       sequence: 0,
       payload: new Uint8Array([0, 0]),
     };
-
-    starts.push(vi.fn().mockImplementationOnce(() => {
-      throw new Error("start failed");
-    }));
 
     await expect(playback.play(frame)).rejects.toThrow("start failed");
     await playback.play({ ...frame, sequence: 1 });
