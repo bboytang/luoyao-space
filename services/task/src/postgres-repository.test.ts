@@ -116,7 +116,7 @@ describe("PostgresTaskRepository", () => {
     });
 
     expect(result.version).toBe(2);
-    expect(calls[0]?.values?.[15]).toBe(1);
+    expect(calls[0]?.values?.[17]).toBe(1);
     expect(calls[0]?.text).toContain("AND version=$16");
   });
 
