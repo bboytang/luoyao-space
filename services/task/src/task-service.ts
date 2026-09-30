@@ -43,6 +43,7 @@ export function createTaskFromPlan(input: CreateTaskFromPlanInput): AgentTask {
     ...(requiresApproval ? { approvalStatus: "PENDING" as const } : {}),
     ...(input.deviceId ? { deviceId: input.deviceId } : {}),
     ...(input.executionContext ? { executionContext: { ...input.executionContext } } : {}),
+    version: 1,
     createdAt: now,
     updatedAt: now,
   };
