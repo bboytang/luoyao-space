@@ -18,12 +18,20 @@ export interface OpenAiAsrSocket {
   ): void;
 }
 
+export interface OpenAiAsrSocketFactory {
+  create(
+    url: string,
+    options: { readonly headers: Record<string, string> },
+  ): OpenAiAsrSocket;
+}
+
 export interface OpenAiAsrOptions {
   readonly apiKey: string;
   readonly model: string;
   readonly url?: string;
+  readonly sampleRate?: number;
   readonly language?: string;
-  readonly WebSocket?: new (url: string, protocols?: string | string[]) => OpenAiAsrSocket;
+  readonly socketFactory: OpenAiAsrSocketFactory;
 }
 
 interface OpenAiAsrServerEvent {
@@ -31,12 +39,6 @@ interface OpenAiAsrServerEvent {
   readonly delta?: string;
   readonly transcript?: string;
   readonly error?: { readonly message?: string; readonly code?: string };
-}
-
-interface OpenAiAsrClientEvent {
-  readonly type: string;
-  readonly audio?: string;
-  readonly session?: Record<string, unknown>;
 }
 
 function toBase64(payload: Uint8Array): string {
@@ -50,7 +52,7 @@ function toBase64(payload: Uint8Array): string {
   return btoa(binary);
 }
 
-function createAudioAppend(frame: AudioFrame): OpenAiAsrClientEvent {
+function createAudioAppend(frame: AudioFrame): string {
   if (frame.codec !== "pcm_s16le") {
     throw new Error("OpenAI realtime transcription requires PCM16 audio");
   }
@@ -59,10 +61,10 @@ function createAudioAppend(frame: AudioFrame): OpenAiAsrClientEvent {
     throw new Error("OpenAI realtime transcription requires mono audio");
   }
 
-  return {
+  return JSON.stringify({
     type: "input_audio_buffer.append",
     audio: toBase64(frame.payload),
-  };
+  });
 }
 
 function isMessageEvent(event: unknown): event is { data: string } {
@@ -75,32 +77,26 @@ function isMessageEvent(event: unknown): event is { data: string } {
 }
 
 export class OpenAiAsrProvider implements AsrProvider {
-  private readonly WebSocketImpl: NonNullable<OpenAiAsrOptions["WebSocket"]>;
-
   constructor(private readonly options: OpenAiAsrOptions) {
     if (!options.apiKey.trim()) throw new Error("OpenAI API key is required");
     if (!options.model.trim()) throw new Error("OpenAI ASR model is required");
-
-    const implementation = options.WebSocket ?? globalThis.WebSocket;
-    if (!implementation) {
-      throw new Error("WebSocket is required for OpenAI realtime transcription");
+    if (!Number.isInteger(options.sampleRate ?? 24000) || (options.sampleRate ?? 24000) <= 0) {
+      throw new Error("OpenAI ASR sample rate must be a positive integer");
     }
-
-    this.WebSocketImpl = implementation as NonNullable<OpenAiAsrOptions["WebSocket"]>;
   }
 
   async *transcribe(
     frames: AsyncIterable<AudioFrame>,
     context: AudioStreamContext,
   ): AsyncIterable<AsrEvent> {
-    const socket = new this.WebSocketImpl(
-      this.options.url ??
-        "wss://api.openai.com/v1/realtime?intent=transcription",
-      ["realtime"],
+    const socket = this.options.socketFactory.create(
+      this.options.url ?? "wss://api.openai.com/v1/realtime",
+      { headers: { Authorization: `Bearer ${this.options.apiKey}` } },
     );
 
     const queue: OpenAiAsrServerEvent[] = [];
     let wake: (() => void) | undefined;
+    let opened = false;
     let closed = false;
     let failure: Error | undefined;
 
@@ -111,17 +107,25 @@ export class OpenAiAsrProvider implements AsrProvider {
     };
 
     const onOpen = () => {
-      const session: Record<string, unknown> = {
-        type: "transcription_session.update",
-        session: {
-          input_audio_format: "pcm16",
-          input_audio_transcription: {
-            model: this.options.model,
-            ...(this.options.language ? { language: this.options.language } : {}),
+      opened = true;
+      socket.send(
+        JSON.stringify({
+          type: "session.update",
+          session: {
+            type: "transcription",
+            audio: {
+              input: {
+                format: { type: "audio/pcm", rate: this.options.sampleRate ?? 24000 },
+                transcription: {
+                  model: this.options.model,
+                  ...(this.options.language ? { language: this.options.language } : {}),
+                },
+                turn_detection: null,
+              },
+            },
           },
-        },
-      };
-      socket.send(JSON.stringify(session));
+        }),
+      );
       notify();
     };
 
@@ -150,11 +154,30 @@ export class OpenAiAsrProvider implements AsrProvider {
     socket.addEventListener("error", onError);
     socket.addEventListener("close", onClose);
 
+    const nextEvent = async (): Promise<OpenAiAsrServerEvent | undefined> => {
+      while (queue.length === 0) {
+        if (failure) throw failure;
+        if (closed) return undefined;
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
+      }
+      return queue.shift();
+    };
+
     try {
+      while (!opened && !context.signal.aborted) {
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
+        if (failure) throw failure;
+        if (closed) throw new Error("OpenAI realtime transcription socket closed before open");
+      }
+
       for await (const frame of frames) {
         if (context.signal.aborted) return;
 
-        socket.send(JSON.stringify(createAudioAppend(frame)));
+        socket.send(createAudioAppend(frame));
 
         while (queue.length > 0) {
           const event = queue.shift()!;
@@ -169,24 +192,16 @@ export class OpenAiAsrProvider implements AsrProvider {
             throw new Error(event.error?.message ?? event.error?.code ?? "OpenAI realtime transcription error");
           }
         }
-
-        if (failure) throw failure;
-        if (closed) throw new Error("OpenAI realtime transcription socket closed");
       }
+
+      if (context.signal.aborted) return;
 
       socket.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
 
       while (!context.signal.aborted) {
-        if (queue.length === 0) {
-          if (failure) throw failure;
-          if (closed) break;
-          await new Promise<void>((resolve) => {
-            wake = resolve;
-          });
-          continue;
-        }
+        const event = await nextEvent();
+        if (!event) break;
 
-        const event = queue.shift()!;
         if (event.type === "conversation.item.input_audio_transcription.delta" && event.delta) {
           yield { type: "partial", text: event.delta };
         } else if (
