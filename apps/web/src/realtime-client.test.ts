@@ -41,6 +41,12 @@ class FakeSocket implements RealtimeClientSocket {
     return Promise.resolve();
   }
 
+  receiveMessage(data: string | Uint8Array): void {
+    for (const handler of this.handlers.message) {
+      handler({ data });
+    }
+  }
+
   receiveClose(code: number, reason: string, wasClean: boolean): void {
     for (const handler of this.handlers.close) {
       handler({ code, reason, wasClean });
@@ -217,6 +223,33 @@ describe("RealtimeClient", () => {
 
     expect(socket.send).not.toHaveBeenCalled();
     expect(socket.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("contains rejected cleanup promises from transport close callbacks", async () => {
+    const { client, socket, input, output } = createClient();
+    input.stop.mockRejectedValue(new Error("input stop failed"));
+    output.stop.mockRejectedValue(new Error("output stop failed"));
+
+    await client.close();
+    socket.receiveClose(1000, "server closed", true);
+    await Promise.resolve();
+
+    expect(input.stop).toHaveBeenCalledTimes(1);
+    expect(output.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("contains rejected playback-idle promises", async () => {
+    const { client, socket, output } = createClient();
+    output.waitForIdle.mockRejectedValue(new Error("idle failed"));
+
+    await client.connect();
+    socket.receiveMessage(JSON.stringify({
+      type: "tts",
+      state: "stop",
+    }));
+    await Promise.resolve();
+
+    expect(output.waitForIdle).toHaveBeenCalledTimes(1);
   });
 
   it("ignores a transport close event after client close", async () => {
