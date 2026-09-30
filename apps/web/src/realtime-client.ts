@@ -140,10 +140,18 @@ export class RealtimeClient {
     if (this.closed) throw new Error("RealtimeClient is closed");
     if (this.listening) return;
     await this.input.start((frame: AudioFrame) => void this.transport.sendAudio(frame));
+    if (this.closed) {
+      await this.input.stop();
+      return;
+    }
     await this.transport.send({
       type: "listen",
       mode: "start",
     });
+    if (this.closed) {
+      await this.input.stop();
+      return;
+    }
     this.listening = true;
   }
 
@@ -151,6 +159,10 @@ export class RealtimeClient {
     if (this.closed) return;
     if (!this.listening) return;
     this.listening = false;
+    if (this.closed) {
+      await this.input.stop();
+      return;
+    }
     await this.transport.send({
       type: "listen",
       mode: "stop",
@@ -164,6 +176,7 @@ export class RealtimeClient {
     await this.input.stop();
     await this.output.stop();
     this.avatarController.handleClosed();
+    if (this.closed) return;
     await this.transport.send({
       type: "abort",
       reason: "user_cancel",
