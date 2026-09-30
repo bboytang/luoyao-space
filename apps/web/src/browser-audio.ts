@@ -178,6 +178,7 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
       source.onended = () => {
         if (ended) return;
         ended = true;
+        if (generation !== this.playbackGeneration) return;
         this.pendingSources -= 1;
         if (this.pendingSources === 0) {
           for (const resolve of this.idleWaiters) resolve();
