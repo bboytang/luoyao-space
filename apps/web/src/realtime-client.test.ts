@@ -108,6 +108,41 @@ describe("RealtimeClient", () => {
     expect(socket.send).not.toHaveBeenCalled();
   });
 
+  it("does not send abort when close wins an in-flight abort", async () => {
+    const socket = new FakeSocket();
+    let releaseStop!: () => void;
+    const stop = vi.fn(() => new Promise<void>((resolve) => {
+      releaseStop = resolve;
+    }));
+    const input = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop,
+    };
+    const output = {
+      play: vi.fn().mockResolvedValue(undefined),
+      waitForIdle: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const avatar = new AvatarRuntime({ renderer: { render: vi.fn() } });
+    const client = new RealtimeClient({
+      url: "wss://example.test/realtime",
+      socket,
+      avatar,
+      input,
+      output,
+    });
+
+    const abortPromise = client.abort();
+    await Promise.resolve();
+    const closePromise = client.close();
+    releaseStop();
+
+    await Promise.all([abortPromise, closePromise]);
+
+    expect(socket.send).not.toHaveBeenCalled();
+    expect(socket.close).toHaveBeenCalledTimes(1);
+  });
+
   it("ignores a transport close event after client close", async () => {
     const { client, socket, input, output } = createClient();
 
