@@ -23,6 +23,7 @@ export function resumeTask(task: AgentTask, now?: string): AgentTask {
     ...task,
     status: transition(task.status, "RUNNING"),
     error: undefined,
+    version: task.version + 1,
     updatedAt: now ?? new Date().toISOString(),
   };
 }
@@ -35,6 +36,7 @@ function updateStatus(
   return {
     ...task,
     status: transition(task.status, target),
+    version: task.version + 1,
     updatedAt: now ?? new Date().toISOString(),
   };
 }
