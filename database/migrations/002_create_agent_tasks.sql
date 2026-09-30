@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS agent_tasks (
   result JSONB,
   error TEXT,
   version BIGINT NOT NULL DEFAULT 1,
+  execution_lease_id TEXT,
+  execution_lease_expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
@@ -22,3 +24,7 @@ CREATE INDEX IF NOT EXISTS agent_tasks_owner_updated_idx
 
 CREATE INDEX IF NOT EXISTS agent_tasks_owner_status_idx
   ON agent_tasks (user_id, companion_id, status);
+
+CREATE INDEX IF NOT EXISTS agent_tasks_execution_lease_idx
+  ON agent_tasks (status, execution_lease_expires_at)
+  WHERE status = 'RUNNING';
