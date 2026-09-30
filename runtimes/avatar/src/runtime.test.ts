@@ -29,6 +29,21 @@ describe("AvatarRuntime", () => {
     expect(runtime.getState().activity).toBe("idle");
   });
 
+  it("renders the current state without mutating it", () => {
+    const r = renderer();
+    const runtime = new AvatarRuntime({ renderer: r.value, clock: () => 300 });
+    const before = runtime.getState();
+
+    runtime.setMouthOpen(0.6);
+    expect(r.states).toHaveLength(1);
+
+    runtime.render();
+
+    expect(r.states).toHaveLength(2);
+    expect(r.states[1]).toMatchObject({ mouthOpen: 0.6 });
+    expect(runtime.getState()).not.toBe(before);
+  });
+
   it("keeps speaking independent from emotion", () => {
     const r = renderer();
     const runtime = new AvatarRuntime({ renderer: r.value, clock: () => 300 });
