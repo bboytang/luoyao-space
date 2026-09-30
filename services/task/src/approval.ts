@@ -75,6 +75,7 @@ export function approveTask(input: ApproveTaskInput): ApprovalResult {
       approvalStatus: "APPROVED",
     }),
     approvalStatus: "APPROVED",
+    version: task.version + 1,
     updatedAt: input.now ?? new Date().toISOString(),
   };
 
