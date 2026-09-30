@@ -5,10 +5,9 @@ import type {
   RealtimeServerMessage,
 } from "../../../runtimes/realtime-device/src/protocol";
 import { isControlMessage } from "../../../runtimes/realtime-device/src/protocol";
-import type { WebSocketLike } from "../../../runtimes/realtime-device/src/websocket-transport";
 import { binaryAudioCodec } from "../../../runtimes/realtime-device/src/binary-audio-codec";
 
-export interface ServerWebSocketLike extends WebSocketLike {
+export interface ServerWebSocketLike {
   addEventListener(
     type: "message",
     listener: (event: { data: string | Uint8Array | ArrayBuffer }) => void,
@@ -43,7 +42,7 @@ export class WebSocketSessionConnection implements RealtimeSessionConnection {
 
   async sendAudio(frame: AudioFrame): Promise<void> {
     if (this.closed) return;
-    this.socket.send(binaryAudioCodec.encode(frame));
+    this.socket.send(binaryAudioCodec.encodeAudio(frame));
   }
 
   onControl(
@@ -76,7 +75,7 @@ export class WebSocketSessionConnection implements RealtimeSessionConnection {
       }
 
       const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-      const frame = binaryAudioCodec.decode(bytes);
+      const frame = binaryAudioCodec.decodeAudio(bytes);
       for (const handler of this.audioHandlers) await handler(frame);
     } catch {
       this.socket.close(1002, "Invalid realtime message");
