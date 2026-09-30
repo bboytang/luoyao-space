@@ -82,6 +82,37 @@ describe("BrowserWebSocket", () => {
   it("exports a browser WebSocket adapter", () => {
     expect(BrowserWebSocket).toBeTypeOf("function");
   });
+
+  it("rejects when the browser socket closes before opening", async () => {
+    const OriginalWebSocket = globalThis.WebSocket;
+    let closeHandler!: () => void;
+
+    class FakeBrowserWebSocket {
+      static OPEN = 1;
+      readyState = 0;
+
+      addEventListener(
+        type: "open" | "error" | "close",
+        listener: () => void,
+      ): void {
+        if (type === "close") closeHandler = listener;
+      }
+
+      send(): void {}
+      close(): void {}
+    }
+
+    vi.stubGlobal("WebSocket", FakeBrowserWebSocket);
+    try {
+      const socket = new BrowserWebSocket("wss://example.test/realtime");
+      const promise = socket.waitForOpen();
+      closeHandler();
+
+      await expect(promise).rejects.toThrow("closed before opening");
+    } finally {
+      vi.stubGlobal("WebSocket", OriginalWebSocket);
+    }
+  });
 });
 
 describe("RealtimeClient", () => {
