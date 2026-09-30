@@ -40,6 +40,14 @@ describe("AvatarRealtimeBridge", () => {
     expect(avatar.getState()).toMatchObject({ speaking: true, mouthOpen: 0.65 });
   });
 
+  it("clears stale mouth openness when a frame cannot be analyzed", () => {
+    const avatar = runtime();
+    const analyzer: LipSyncAnalyzer = { analyze: () => undefined };
+    const bridge = new AvatarRealtimeBridge(avatar, analyzer);
+    bridge.handleOutput({ type: "tts_audio", frame });
+    expect(avatar.getState().mouthOpen).toBe(0);
+  });
+
   it("stops speaking on abort or error", () => {
     const avatar = runtime();
     const bridge = new AvatarRealtimeBridge(avatar);
