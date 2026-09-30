@@ -1,3 +1,8 @@
+declare class AudioWorkletProcessor {
+  readonly port: MessagePort;
+  constructor(options?: AudioWorkletNodeOptions);
+}
+
 declare function registerProcessor(
   name: string,
   processorCtor: typeof AudioWorkletProcessor,
@@ -14,7 +19,7 @@ class LuoyaoPcmCaptureProcessor extends AudioWorkletProcessor {
   private readonly pending: number[] = [];
 
   constructor(options?: CaptureProcessorOptions) {
-    super();
+    super(options);
     this.frameSamples = options?.processorOptions?.frameSamples ?? 480;
   }
 
