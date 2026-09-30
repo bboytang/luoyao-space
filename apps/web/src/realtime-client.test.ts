@@ -108,6 +108,82 @@ describe("RealtimeClient", () => {
     expect(socket.send).not.toHaveBeenCalled();
   });
 
+  it("makes concurrent close calls wait for the same cleanup", async () => {
+    const socket = new FakeSocket();
+    let releaseStop!: () => void;
+    const input = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn(() => new Promise<void>((resolve) => {
+        releaseStop = resolve;
+      })),
+    };
+    const output = {
+      play: vi.fn().mockResolvedValue(undefined),
+      waitForIdle: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const avatar = new AvatarRuntime({ renderer: { render: vi.fn() } });
+    const client = new RealtimeClient({
+      url: "wss://example.test/realtime",
+      socket,
+      avatar,
+      input,
+      output,
+    });
+
+    const firstClose = client.close();
+    const secondClose = client.close();
+    let secondFinished = false;
+    void secondClose.then(() => {
+      secondFinished = true;
+    });
+
+    await Promise.resolve();
+    expect(secondFinished).toBe(false);
+
+    releaseStop();
+    await Promise.all([firstClose, secondClose]);
+
+    expect(secondFinished).toBe(true);
+    expect(input.stop).toHaveBeenCalledTimes(1);
+    expect(output.stop).toHaveBeenCalledTimes(1);
+    expect(socket.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not send hello when close wins while waiting for open", async () => {
+    const socket = new FakeSocket();
+    let releaseOpen!: () => void;
+    socket.waitForOpen = () => new Promise<void>((resolve) => {
+      releaseOpen = resolve;
+    });
+    const input = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const output = {
+      play: vi.fn().mockResolvedValue(undefined),
+      waitForIdle: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const avatar = new AvatarRuntime({ renderer: { render: vi.fn() } });
+    const client = new RealtimeClient({
+      url: "wss://example.test/realtime",
+      socket,
+      avatar,
+      input,
+      output,
+    });
+
+    const connectPromise = client.connect();
+    await Promise.resolve();
+    const closePromise = client.close();
+    releaseOpen();
+
+    await expect(connectPromise).rejects.toThrow("RealtimeClient is closed");
+    await closePromise;
+    expect(socket.send).not.toHaveBeenCalled();
+  });
+
   it("does not send abort when close wins an in-flight abort", async () => {
     const socket = new FakeSocket();
     let releaseStop!: () => void;
