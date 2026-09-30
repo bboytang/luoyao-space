@@ -10,6 +10,7 @@ import type {
 } from "./transport";
 
 export interface WebSocketLike {
+  waitForOpen(): Promise<void>;
   send(data: string | Uint8Array): void;
   close(code?: number, reason?: string): void;
   addEventListener(
@@ -70,6 +71,10 @@ export class WebSocketTransport implements RealtimeTransport {
         handler(closeEvent);
       }
     });
+  }
+
+  async waitUntilReady(): Promise<void> {
+    await this.socket.waitForOpen();
   }
 
   private protocolClose(code: number, reason: string): void {
