@@ -51,6 +51,7 @@ function createSession() {
     handleAudioFrame: vi.fn(),
     getPlaybackEpoch: vi.fn().mockReturnValue(1),
     handlePlaybackIdle: vi.fn(),
+    handleAborted: vi.fn(),
     handleClosed: vi.fn(),
   };
   const states: string[] = [];
@@ -216,7 +217,12 @@ describe("RealtimeSession", () => {
     expect(transport.send).toHaveBeenNthCalledWith(2, { type: "abort", reason: "user_cancel" });
     expect(input.stop).toHaveBeenCalledTimes(1);
     expect(output.stop).toHaveBeenCalledTimes(1);
-    expect(avatar.handleClosed).toHaveBeenCalledTimes(1);
+    expect(avatar.handleAborted).toHaveBeenCalledTimes(1);
+    expect(avatar.handleClosed).not.toHaveBeenCalled();
+
+    await session.startListening();
+    expect(input.start).toHaveBeenCalledTimes(2);
+    expect(transport.send).toHaveBeenLastCalledWith({ type: "listen", mode: "start" });
   });
 
   it("waits for an in-flight listening start before closing", async () => {
