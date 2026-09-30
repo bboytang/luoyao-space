@@ -39,6 +39,7 @@ export class DomAvatarRenderer implements AvatarRenderer {
   }
 
   render(state: Readonly<AvatarState>): void {
+    if (this.disposed) return;
     this.state = state;
     this.renderFrame();
   }
