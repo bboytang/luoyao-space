@@ -194,6 +194,44 @@ describe("executeTask", () => {
     expect(result.task.updatedAt).toBe("2026-09-30T01:03:00.000Z");
   });
 
+  it("resumes from the same step after user input is supplied", async () => {
+    const waiting = await executeTask({
+      task,
+      device,
+      permission,
+      resolveCapability,
+      backend: {
+        execute: async () => {
+          throw new ToolExecutionError("USER_INPUT_REQUIRED", "请选择目标文件");
+        },
+      },
+    });
+
+    const resumedTask = (await import("./task-control")).resumeTask(
+      waiting.task,
+      "2026-09-30T01:04:00.000Z",
+    );
+
+    expect(resumedTask.status).toBe("RUNNING");
+    expect(resumedTask.currentStep).toBe(0);
+
+    const resumed = await executeTask({
+      task: resumedTask,
+      device,
+      permission,
+      resolveCapability,
+      backend: {
+        execute: async (invocation) => ({
+          completed: invocation.capabilityId,
+        }),
+      },
+      now: "2026-09-30T01:05:00.000Z",
+    });
+
+    expect(resumed.task.status).toBe("COMPLETED");
+    expect(resumed.task.currentStep).toBe(2);
+  });
+
   it("rejects a task without a target device", async () => {
     await expect(
       executeTask({
