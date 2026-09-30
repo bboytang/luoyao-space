@@ -10,6 +10,8 @@ export type EventType =
   | "task.created"
   | "task.started"
   | "task.progress"
+  | "task.waiting_user"
+  | "task.waiting_user"
   | "task.completed"
   | "task.failed"
   | "task.paused"
