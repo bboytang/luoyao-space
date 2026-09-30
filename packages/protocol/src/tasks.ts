@@ -33,6 +33,7 @@ export interface AgentTask {
   executionContext?: Record<string, unknown>;
   result?: unknown;
   error?: string;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }
