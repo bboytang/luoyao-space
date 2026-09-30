@@ -186,6 +186,7 @@ describe("RealtimeSession", () => {
     const second = session.stopListening();
 
     expect(transport.send).toHaveBeenCalledTimes(2);
+    await Promise.resolve();
     expect(input.stop).toHaveBeenCalledTimes(1);
 
     releaseStop();
