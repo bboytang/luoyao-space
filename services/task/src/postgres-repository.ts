@@ -46,7 +46,7 @@ export class PostgresTaskRepository implements TaskRepository {
   async create(task: AgentTask): Promise<AgentTask> {
     if (task.version !== 1) throw new Error("New tasks must start at version 1");
     const result = await this.client.query<TaskRow>(
-      `INSERT INTO agent_tasks (
+      `INSERT INTO tasks (
         task_id,user_id,companion_id,goal,status,plan,current_step,requires_approval,
         approval_status,device_id,execution_context,result,error,version,
         execution_lease_id,execution_lease_expires_at,created_at,updated_at
@@ -69,7 +69,7 @@ export class PostgresTaskRepository implements TaskRepository {
 
   async get(input: { taskId: string; userId: string; companionId: string }): Promise<AgentTask | null> {
     const result = await this.client.query<TaskRow>(
-      `SELECT ${selectColumns} FROM agent_tasks WHERE task_id=$1 AND user_id=$2 AND companion_id=$3`,
+      `SELECT ${selectColumns} FROM tasks WHERE task_id=$1 AND user_id=$2 AND companion_id=$3`,
       [input.taskId,input.userId,input.companionId],
     );
     const row = result.rows[0];
@@ -82,7 +82,7 @@ export class PostgresTaskRepository implements TaskRepository {
     }
     const task = input.task;
     const result = await this.client.query<TaskRow>(
-      `UPDATE agent_tasks
+      `UPDATE tasks
        SET goal=$4,status=$5,plan=$6::jsonb,current_step=$7,requires_approval=$8,
            approval_status=$9,device_id=$10,execution_context=$11::jsonb,result=$12::jsonb,
            error=$13,version=$14,execution_lease_id=$15,execution_lease_expires_at=$16::timestamptz,
@@ -106,7 +106,7 @@ export class PostgresTaskRepository implements TaskRepository {
     task: AgentTask; leaseId: string; leaseExpiresAt: string; now: string;
   }): Promise<AgentTask> {
     const result = await this.client.query<TaskRow>(
-      `UPDATE agent_tasks
+      `UPDATE tasks
        SET execution_lease_id=$4, execution_lease_expires_at=$5::timestamptz,
            version=version+1, updated_at=$6::timestamptz
        WHERE task_id=$1 AND user_id=$2 AND companion_id=$3
@@ -119,7 +119,19 @@ export class PostgresTaskRepository implements TaskRepository {
       ],
     );
     const row = result.rows[0];
-    if (!row) throw new TaskLeaseError();
-    return toTask(row);
+    if (row) return toTask(row);
+
+    const current = await this.get({
+      taskId: input.task.taskId,
+      userId: input.task.userId,
+      companionId: input.task.companionId,
+    });
+    if (!current) throw new Error("Task not found");
+    if (current.version !== input.task.version) throw new TaskConcurrencyError();
+    if (current.status !== "RUNNING") throw new TaskLeaseError("Task is not running");
+    if (current.executionLeaseId && current.executionLeaseExpiresAt && current.executionLeaseExpiresAt > input.now) {
+      throw new TaskConcurrencyError("Task execution lease is already held");
+    }
+    throw new TaskLeaseError();
   }
 }
