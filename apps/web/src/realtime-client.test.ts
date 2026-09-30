@@ -259,9 +259,7 @@ describe("RealtimeClient", () => {
   it("does not report connected if the socket closes during hello", async () => {
     const states: string[] = [];
     const socket = new FakeSocket();
-    const originalSend = socket.send.bind(socket);
-    socket.send = vi.fn((data) => {
-      originalSend(data);
+    socket.send.mockImplementation(() => {
       socket.receiveClose(1000, "server closed", true);
     });
     const input = {
