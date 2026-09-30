@@ -21,6 +21,7 @@ function task(overrides: Partial<AgentTask> = {}): AgentTask {
     currentStep: 0,
     requiresApproval: true,
     approvalStatus: "PENDING",
+    version: 1,
     deviceId: "desktop-1",
     createdAt: "2026-09-30T00:00:00.000Z",
     updatedAt: "2026-09-30T00:00:00.000Z",
