@@ -48,7 +48,7 @@
 6. [x] Versioned task progress without status change
 7. [x] PostgreSQL TaskRepository
 8. [x] Durable task lifecycle/audit event publisher
-9. [ ] Refactor Task Runner to persist every step transition
+9. [x] Refactor Task Runner to persist every step transition
 10. [ ] Restart/resume from persisted task state
 11. [ ] Production concurrency tests against PostgreSQL
 
