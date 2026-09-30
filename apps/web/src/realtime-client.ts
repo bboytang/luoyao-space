@@ -9,6 +9,8 @@ export interface RealtimeClientSocket extends WebSocketLike {
   waitForOpen(): Promise<void>;
 }
 
+export type RealtimeClientState = "connecting" | "connected" | "closed";
+
 export interface RealtimeClientOptions {
   url: string;
   socket?: RealtimeClientSocket;
@@ -17,6 +19,7 @@ export interface RealtimeClientOptions {
   output: RealtimeAudioOutput;
   sessionId?: string;
   deviceId?: string;
+  onStateChange?: (state: RealtimeClientState) => void;
 }
 
 export class BrowserWebSocket implements WebSocketLike {
@@ -93,6 +96,7 @@ export class RealtimeClient {
   private listening = false;
   private closed = false;
   private closePromise?: Promise<void>;
+  private readonly onStateChange?: (state: RealtimeClientState) => void;
 
   constructor(options: RealtimeClientOptions) {
     this.socket = options.socket ?? new BrowserWebSocket(options.url);
@@ -102,6 +106,7 @@ export class RealtimeClient {
     this.avatarController = new RealtimeAvatarController({
       avatar: options.avatar,
     });
+    this.onStateChange = options.onStateChange;
 
     this.removeMessage = this.transport.onMessage((message) => {
       this.avatarController.handleServerMessage(message);
@@ -120,6 +125,7 @@ export class RealtimeClient {
       if (this.closed) return;
       this.closed = true;
       this.listening = false;
+      this.onStateChange?.("closed");
       this.removeMessage?.();
       this.removeAudio?.();
       this.removeClose?.();
@@ -140,6 +146,7 @@ export class RealtimeClient {
 
   async connect(): Promise<void> {
     if (this.closed) throw new Error("RealtimeClient is closed");
+    this.onStateChange?.("connecting");
     await this.socket.waitForOpen();
     if (this.closed) throw new Error("RealtimeClient is closed");
     await this.transport.send({
@@ -149,6 +156,7 @@ export class RealtimeClient {
       deviceId: this.deviceId,
       capabilities: ["audio.pcm_s16le", "avatar.dynamic"],
     });
+    this.onStateChange?.("connected");
   }
 
   async startListening(): Promise<void> {
@@ -206,6 +214,7 @@ export class RealtimeClient {
 
     this.closed = true;
     this.listening = false;
+    this.onStateChange?.("closed");
 
     this.removeMessage?.();
     this.removeAudio?.();
