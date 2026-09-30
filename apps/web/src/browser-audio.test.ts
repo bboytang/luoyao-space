@@ -33,6 +33,37 @@ describe("browser audio adapters", () => {
     expect(track.stop).toHaveBeenCalledTimes(1);
   });
 
+  it("cleans up resources when capture startup fails", async () => {
+    const track = { stop: vi.fn() };
+    const stream = { getTracks: () => [track] };
+    const close = vi.fn().mockResolvedValue(undefined);
+
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn().mockResolvedValue(stream),
+      },
+    });
+
+    class FakeAudioContext {
+      readonly audioWorklet = {
+        addModule: vi.fn().mockRejectedValue(new Error("worklet failed")),
+      };
+      async resume(): Promise<void> {}
+      async close(): Promise<void> {
+        await close();
+      }
+    }
+
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+
+    const capture = new BrowserPcmCapture();
+
+    await expect(capture.start(() => {})).rejects.toThrow("worklet failed");
+
+    expect(track.stop).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
   it("can start again after a completed capture stop", async () => {
     const tracks = [
       { stop: vi.fn() },
