@@ -97,7 +97,7 @@ export class RealtimeClient {
       this.avatarController.handleServerMessage(message);
     });
     this.removeAudio = this.transport.onAudio((frame) => {
-      this.avatarController.handleAudioFrame(frame);
+      this.avatarController.handleAudioFrame();
       void this.output.play(frame);
     });
     this.removeClose = this.transport.onClose(() => {
