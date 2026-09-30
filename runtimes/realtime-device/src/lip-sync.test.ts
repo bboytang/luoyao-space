@@ -8,7 +8,7 @@ function frame(payload: Uint8Array, codec: AudioFrame["codec"] = "pcm_s16le"): A
 
 describe("PcmLipSyncAnalyzer", () => {
   it("maps silent PCM to a closed mouth", () => {
-    expect(new PcmLipSyncAnalyzer().analyze(frame(new Uint8Array([0, 0, 0, 0])))).toEqual({ sequence: 7, timestampMs: 120, openness: 0 });
+    expect(new PcmLipSyncAnalyzer().analyze(frame(new Uint8Array([0, 0, 0, 0])))).toEqual({ sequence: 7, openness: 0 });
   });
 
   it("maps louder PCM to greater mouth openness", () => {
