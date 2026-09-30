@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CapabilityDefinition, CapabilityInvocation } from "../../../packages/protocol/src/capabilities";
-import { executeCapability } from "./runner";
+import { executeCapability, ToolExecutionError } from "./runner";
 
 const capability: CapabilityDefinition = {
   id: "filesystem.write",
@@ -91,6 +91,33 @@ describe("tool execution runner", () => {
       error: {
         code: "BACKEND_EXECUTION_FAILED",
         message: "backend unavailable",
+      },
+    });
+  });
+
+  it("preserves structured tool errors for task control flow", async () => {
+    const result = await executeCapability(
+      capability,
+      invocation,
+      {
+        ...context,
+        backend: {
+          execute: async () => {
+            throw new ToolExecutionError(
+              "USER_INPUT_REQUIRED",
+              "需要用户选择目标文件",
+            );
+          },
+        },
+      },
+    );
+
+    expect(result).toEqual({
+      invocationId: "inv-1",
+      ok: false,
+      error: {
+        code: "USER_INPUT_REQUIRED",
+        message: "需要用户选择目标文件",
       },
     });
   });
