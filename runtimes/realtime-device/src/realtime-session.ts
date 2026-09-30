@@ -39,6 +39,9 @@ export class RealtimeSession {
   private listening = false;
   private closed = false;
   private closePromise?: Promise<void>;
+  private connectPromise?: Promise<void>;
+  private startListeningPromise?: Promise<void>;
+  private stopListeningPromise?: Promise<void>;
   private state: RealtimeClientSessionState = "closed";
 
   constructor(options: RealtimeSessionOptions) {
@@ -83,47 +86,89 @@ export class RealtimeSession {
 
   async connect(): Promise<void> {
     if (this.closed) throw new Error("RealtimeSession is closed");
-    this.setState("connecting");
-    await this.transport.waitUntilReady();
-    if (this.closed) throw new Error("RealtimeSession is closed");
+    if (this.connectPromise) {
+      await this.connectPromise;
+      return;
+    }
+    if (this.state === "connected") return;
 
-    await this.transport.send({
-      type: "hello",
-      version: 1,
-      sessionId: this.sessionId,
-      deviceId: this.deviceId,
-      capabilities: this.capabilities,
-    });
+    this.connectPromise = (async () => {
+      this.setState("connecting");
+      await this.transport.waitUntilReady();
+      if (this.closed) throw new Error("RealtimeSession is closed");
 
-    if (this.closed) throw new Error("RealtimeSession is closed");
-    this.setState("connected");
+      await this.transport.send({
+        type: "hello",
+        version: 1,
+        sessionId: this.sessionId,
+        deviceId: this.deviceId,
+        capabilities: this.capabilities,
+      });
+
+      if (this.closed) throw new Error("RealtimeSession is closed");
+      this.setState("connected");
+    })();
+
+    try {
+      await this.connectPromise;
+    } finally {
+      this.connectPromise = undefined;
+    }
   }
 
   async startListening(): Promise<void> {
     if (this.closed) throw new Error("RealtimeSession is closed");
     if (this.listening) return;
-
-    await this.input.start((frame: AudioFrame) => void this.transport.sendAudio(frame));
-    if (this.closed) {
-      await this.input.stop();
+    if (this.startListeningPromise) {
+      await this.startListeningPromise;
       return;
     }
 
-    await this.transport.send({ type: "listen", mode: "start" });
-    if (this.closed) {
-      await this.input.stop();
-      return;
-    }
+    this.startListeningPromise = (async () => {
+      await this.input.start((frame: AudioFrame) => void this.transport.sendAudio(frame));
+      if (this.closed) {
+        await this.input.stop();
+        return;
+      }
 
-    this.listening = true;
+      await this.transport.send({ type: "listen", mode: "start" });
+      if (this.closed) {
+        await this.input.stop();
+        return;
+      }
+
+      this.listening = true;
+    })();
+
+    try {
+      await this.startListeningPromise;
+    } finally {
+      this.startListeningPromise = undefined;
+    }
   }
 
   async stopListening(): Promise<void> {
+    if (this.closed) return;
+    if (this.stopListeningPromise) {
+      await this.stopListeningPromise;
+      return;
+    }
+    if (this.startListeningPromise) {
+      await this.startListeningPromise;
+    }
     if (this.closed || !this.listening) return;
 
-    this.listening = false;
-    await this.transport.send({ type: "listen", mode: "stop" });
-    await this.input.stop();
+    this.stopListeningPromise = (async () => {
+      this.listening = false;
+      await this.transport.send({ type: "listen", mode: "stop" });
+      await this.input.stop();
+    })();
+
+    try {
+      await this.stopListeningPromise;
+    } finally {
+      this.stopListeningPromise = undefined;
+    }
   }
 
   async abort(): Promise<void> {

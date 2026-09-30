@@ -70,6 +70,30 @@ function createSession() {
 }
 
 describe("RealtimeSession", () => {
+  it("coalesces concurrent connect calls into one handshake", async () => {
+    const { session, transport } = createSession();
+    let releaseReady!: () => void;
+    transport.waitUntilReady.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { releaseReady = resolve; }),
+    );
+
+    const first = session.connect();
+    const second = session.connect();
+
+    expect(transport.waitUntilReady).toHaveBeenCalledTimes(1);
+    releaseReady();
+    await Promise.all([first, second]);
+
+    expect(transport.send).toHaveBeenCalledTimes(1);
+    expect(transport.send).toHaveBeenCalledWith({
+      type: "hello",
+      version: 1,
+      sessionId: "session-1",
+      deviceId: "device-1",
+      capabilities: ["audio.pcm_s16le"],
+    });
+  });
+
   it("waits for transport readiness and sends configured hello", async () => {
     const { session, transport } = createSession();
     await session.connect();
@@ -109,6 +133,66 @@ describe("RealtimeSession", () => {
 
     expect(avatar.handleAudioFrame).toHaveBeenCalledTimes(1);
     expect(output.play).toHaveBeenCalledWith(frame);
+  });
+
+  it("coalesces concurrent listening starts", async () => {
+    const { session, input, transport } = createSession();
+    let releaseStart!: () => void;
+    input.start.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { releaseStart = resolve; }),
+    );
+
+    const first = session.startListening();
+    const second = session.startListening();
+
+    expect(input.start).toHaveBeenCalledTimes(1);
+    releaseStart();
+    await Promise.all([first, second]);
+
+    expect(transport.send).toHaveBeenCalledTimes(1);
+    expect(transport.send).toHaveBeenCalledWith({ type: "listen", mode: "start" });
+  });
+
+  it("waits for an in-flight listening start before stopping", async () => {
+    const { session, input, transport } = createSession();
+    let releaseStart!: () => void;
+    input.start.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { releaseStart = resolve; }),
+    );
+
+    const start = session.startListening();
+    const stop = session.stopListening();
+
+    expect(transport.send).not.toHaveBeenCalledWith({ type: "listen", mode: "stop" });
+
+    releaseStart();
+    await Promise.all([start, stop]);
+
+    expect(transport.send).toHaveBeenNthCalledWith(1, { type: "listen", mode: "start" });
+    expect(transport.send).toHaveBeenNthCalledWith(2, { type: "listen", mode: "stop" });
+    expect(input.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces concurrent listening stops", async () => {
+    const { session, input, transport } = createSession();
+    await session.startListening();
+
+    let releaseStop!: () => void;
+    input.stop.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { releaseStop = resolve; }),
+    );
+
+    const first = session.stopListening();
+    const second = session.stopListening();
+
+    expect(transport.send).toHaveBeenCalledTimes(2);
+    expect(input.stop).toHaveBeenCalledTimes(1);
+
+    releaseStop();
+    await Promise.all([first, second]);
+
+    expect(transport.send).toHaveBeenNthCalledWith(2, { type: "listen", mode: "stop" });
+    expect(input.stop).toHaveBeenCalledTimes(1);
   });
 
   it("keeps lifecycle operations terminal and idempotent", async () => {
