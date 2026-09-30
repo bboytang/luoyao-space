@@ -1,3 +1,4 @@
+import { validateEmbedding } from "./embedding";
 import type { MemoryKind, MemoryRecord } from "./ranking";
 import type { CreateMemoryInput, MemoryCandidateQuery, MemoryRepository } from "./repository";
 
@@ -40,9 +41,7 @@ function toRecord(row: MemoryRow): MemoryRecord {
 }
 
 function vectorLiteral(vector: readonly number[]): string {
-  if (vector.length === 0 || vector.some((value) => !Number.isFinite(value))) {
-    throw new Error("Memory query embedding must contain finite values");
-  }
+  validateEmbedding(vector);
   return "[" + vector.join(",") + "]";
 }
 
