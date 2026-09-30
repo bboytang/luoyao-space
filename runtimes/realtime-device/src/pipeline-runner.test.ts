@@ -51,15 +51,15 @@ describe("runAudioPipeline", () => {
       tts: { async *synthesize() { yield { type: "started" as const }; yield { type: "audio" as const, frame }; yield { type: "completed" as const }; } },
     };
     const outputs: string[] = [];
+    const pipelineOutputs: Array<{ type: string; final?: boolean }> = [];
     for await (const output of runAudioPipeline(pipeline, (async function* () { yield frame; })(), {
       sessionId: "metrics-session", conversationId: "metrics-conversation", signal: new AbortController().signal,
       onMetrics: (value) => metrics.push(value),
-    })) outputs.push(output.type);
+    })) {
+      outputs.push(output.type);
+      pipelineOutputs.push(output);
+    }
     expect(outputs).toEqual(["stt", "stt", "tts_audio", "completed"]);
-    const pipelineOutputs = [] as Array<{ type: string; final?: boolean }>;
-    for await (const output of runAudioPipeline(pipeline, (async function* () { yield frame; })(), {
-      sessionId: "metrics-session-2", conversationId: "metrics-conversation-2", signal: new AbortController().signal,
-    })) pipelineOutputs.push(output);
     expect(pipelineOutputs.filter((output) => output.type === "stt").map((output) => output.final)).toEqual([false, true]);
 
     const final = metrics.at(-1);
