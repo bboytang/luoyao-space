@@ -9,6 +9,7 @@ import { AudioFrameBuffer } from "./audio-buffer";
 export interface PipelineOutput {
   type: "stt" | "tts_audio" | "completed" | "aborted" | "error";
   text?: string;
+  final?: boolean;
   frame?: AudioFrame;
   error?: Error;
 }
@@ -63,13 +64,13 @@ export async function* runAudioPipeline(
 
       if (asrEvent.type === "partial") {
         markOnce("asrFirstPartialMs", Date.now() - startedAt);
-        yield { type: "stt", text: asrEvent.text };
+        yield { type: "stt", text: asrEvent.text, final: false };
         continue;
       }
 
       finalText = asrEvent.text;
       markOnce("asrFinalMs", Date.now() - startedAt);
-      yield { type: "stt", text: finalText };
+      yield { type: "stt", text: finalText, final: true };
     }
 
     if (!finalText.trim()) {
