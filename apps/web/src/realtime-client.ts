@@ -117,7 +117,15 @@ export class RealtimeClient {
       void this.output.play(frame).catch(() => {});
     });
     this.removeClose = this.transport.onClose(() => {
+      if (this.closed) return;
+      this.closed = true;
       this.listening = false;
+      this.removeMessage?.();
+      this.removeAudio?.();
+      this.removeClose?.();
+      this.removeMessage = undefined;
+      this.removeAudio = undefined;
+      this.removeClose = undefined;
       this.avatarController.handleClosed();
       void this.input.stop().catch(() => {});
       void this.output.stop().catch(() => {});
