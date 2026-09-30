@@ -34,6 +34,8 @@ export interface AgentTask {
   result?: unknown;
   error?: string;
   version: number;
+  executionLeaseId?: string;
+  executionLeaseExpiresAt?: string;
   createdAt: string;
   updatedAt: string;
 }
