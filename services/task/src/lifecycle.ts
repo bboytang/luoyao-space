@@ -1,4 +1,5 @@
 import type { TaskAuditEventData, TaskAuditEventType } from "../../../packages/protocol/src/events";
+import { canTransition, transitionAfterApproval } from "./state-machine";
 import type { AgentTask } from "../../../packages/protocol/src/tasks";
 import {
   createTaskAuditEvent,
@@ -81,5 +82,18 @@ function assertTransition(previous: AgentTask, next: AgentTask): void {
   }
   if (next.version !== previous.version + 1) {
     throw new Error("Task transition must advance version exactly once");
+  }
+  if (previous.status === next.status) {
+    throw new Error("Task transition must change status");
+  }
+  if (previous.status === "WAITING_APPROVAL" && next.status === "RUNNING") {
+    if (next.approvalStatus !== "APPROVED") {
+      throw new Error("Approval transition requires an approved task");
+    }
+    transitionAfterApproval(next);
+    return;
+  }
+  if (!canTransition(previous.status, next.status)) {
+    throw new Error(`Invalid task transition: ${previous.status} -> ${next.status}`);
   }
 }
