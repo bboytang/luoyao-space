@@ -256,6 +256,21 @@ describe("RealtimeClient", () => {
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
 
+  it("treats a remote socket close as a terminal lifecycle state", async () => {
+    const { client, socket, input, output } = createClient();
+
+    await client.connect();
+    socket.receiveClose(1006, "network lost", false);
+
+    await expect(client.connect()).rejects.toThrow("RealtimeClient is closed");
+    await client.startListening().catch((error: unknown) => {
+      expect(error).toEqual(new Error("RealtimeClient is closed"));
+    });
+
+    expect(input.stop).toHaveBeenCalledTimes(1);
+    expect(output.stop).toHaveBeenCalledTimes(1);
+  });
+
   it("contains rejected cleanup promises from transport close callbacks", async () => {
     const { client, socket, input, output } = createClient();
     input.stop.mockRejectedValue(new Error("input stop failed"));
