@@ -69,6 +69,9 @@ export class BrowserWebSocket implements WebSocketLike {
       this.socket.addEventListener("error", () => reject(new Error("WebSocket connection failed")), {
         once: true,
       });
+      this.socket.addEventListener("close", () => reject(new Error("WebSocket closed before opening")), {
+        once: true,
+      });
     });
   }
 }
