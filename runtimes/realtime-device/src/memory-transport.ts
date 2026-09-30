@@ -25,7 +25,7 @@ export class MemoryRealtimeTransport implements RealtimeTransport {
   private readonly closeHandlers = new Set<CloseHandler>();
   private closed = false;
 
-  async send(message: RealtimeServerMessage): Promise<void> {
+  async send(message: RealtimeControlMessage): Promise<void> {
     this.assertOpen();
     this.sentMessages.push(message);
   }
