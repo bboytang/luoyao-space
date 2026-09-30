@@ -138,8 +138,9 @@ describe("OpenAiAsrProvider", () => {
       context(),
     )[Symbol.asyncIterator]();
 
+    const next = iterator.next();
     socket.emit("open", {});
-    await expect(iterator.next()).rejects.toThrow("requires PCM16 audio");
+    await expect(next).rejects.toThrow("requires PCM16 audio");
   });
 
   it("requires credentials and a model", () => {
