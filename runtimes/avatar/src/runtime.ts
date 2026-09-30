@@ -62,7 +62,7 @@ export class AvatarRuntime {
   }
 
   setSpeaking(speaking: boolean): Readonly<AvatarState> {
-    this.state = { ...this.state, speaking, activity: speaking ? "speaking" : this.state.activity === "speaking" ? "idle" : this.state.activity, updatedAt: this.clock() };
+    this.state = { ...this.state, speaking, mouthOpen: speaking ? this.state.mouthOpen : 0, activity: speaking ? "speaking" : this.state.activity === "speaking" ? "idle" : this.state.activity, updatedAt: this.clock() };
     this.renderer.render(this.state);
     return this.state;
   }
