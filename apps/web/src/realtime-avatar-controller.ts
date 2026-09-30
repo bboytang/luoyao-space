@@ -11,6 +11,7 @@ export interface RealtimeAvatarControllerOptions {
  */
 export class RealtimeAvatarController {
   private readonly avatar: AvatarRuntime;
+  private ttsEnded = false;
 
   constructor(options: RealtimeAvatarControllerOptions) {
     this.avatar = options.avatar;
@@ -26,9 +27,10 @@ export class RealtimeAvatarController {
         break;
       case "tts":
         if (message.state === "start" || message.state === "sentence_start") {
+          this.ttsEnded = false;
           this.avatar.setSpeaking(true);
-        } else {
-          this.avatar.setSpeaking(false);
+        } else if (message.state === "stop") {
+          this.ttsEnded = true;
         }
         break;
       case "error":
@@ -42,6 +44,10 @@ export class RealtimeAvatarController {
 
   handleAudioFrame(): void {
     this.avatar.setSpeaking(true);
+  }
+
+  handlePlaybackIdle(): void {
+    if (this.ttsEnded) this.avatar.setSpeaking(false);
   }
 
   handleClosed(): void {
