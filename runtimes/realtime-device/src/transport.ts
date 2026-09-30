@@ -5,6 +5,7 @@ import type {
 } from "./protocol";
 
 export interface RealtimeTransport {
+  waitUntilReady(): Promise<void>;
   send(message: RealtimeControlMessage): Promise<void>;
   sendAudio(frame: AudioFrame): Promise<void>;
   close(code?: number, reason?: string): Promise<void>;
