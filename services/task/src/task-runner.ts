@@ -91,6 +91,7 @@ export async function executeTask(
       ...task,
       currentStep: nextStep,
       status: nextStatus,
+      version: task.version + 1,
       ...(nextStatus === "COMPLETED" ? { result: stepResults.map(getOutput) } : {}),
       updatedAt: input.now ?? new Date().toISOString(),
     };
@@ -104,6 +105,7 @@ function failTask(task: AgentTask, error: string, now?: string): AgentTask {
     ...task,
     status: transition(task.status, "FAILED"),
     error,
+    version: task.version + 1,
     updatedAt: now ?? new Date().toISOString(),
   };
 }
