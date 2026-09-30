@@ -158,6 +158,7 @@ describe("executeTask", () => {
       device,
       repository,
       lifecycle,
+      permission,
       resolveCapability,
       backend: {
         execute: async () => {
