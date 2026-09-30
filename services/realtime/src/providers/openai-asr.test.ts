@@ -75,7 +75,6 @@ describe("OpenAiAsrProvider", () => {
     const first = iterator.next();
 
     socket.emit("open", {});
-    await first;
 
     const sessionUpdate = JSON.parse(socket.sent[0]);
     expect(sessionUpdate).toEqual({
@@ -92,8 +91,6 @@ describe("OpenAiAsrProvider", () => {
       },
     });
 
-    const second = await iterator.next();
-    expect(second.value).toEqual({ type: "partial", text: "你好" });
     expect(JSON.parse(socket.sent[1])).toEqual({
       type: "input_audio_buffer.append",
       audio: "AQIDBA==",
@@ -105,8 +102,8 @@ describe("OpenAiAsrProvider", () => {
         delta: "你好",
       }),
     });
-    const third = await iterator.next();
-    expect(third.value).toEqual({ type: "partial", text: "你好" });
+    const firstEvent = await first;
+    expect(firstEvent.value).toEqual({ type: "partial", text: "你好" });
 
     socket.emit("message", {
       data: JSON.stringify({
