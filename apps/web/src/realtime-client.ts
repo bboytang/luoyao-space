@@ -97,6 +97,13 @@ export class RealtimeClient {
   private closed = false;
   private closePromise?: Promise<void>;
   private readonly onStateChange?: (state: RealtimeClientState) => void;
+  private state: RealtimeClientState = "closed";
+
+  private setState(state: RealtimeClientState): void {
+    if (this.state === state) return;
+    this.state = state;
+    this.onStateChange?.(state);
+  }
 
   constructor(options: RealtimeClientOptions) {
     this.socket = options.socket ?? new BrowserWebSocket(options.url);
@@ -125,7 +132,7 @@ export class RealtimeClient {
       if (this.closed) return;
       this.closed = true;
       this.listening = false;
-      this.onStateChange?.("closed");
+      this.setState("closed");
       this.removeMessage?.();
       this.removeAudio?.();
       this.removeClose?.();
@@ -146,7 +153,7 @@ export class RealtimeClient {
 
   async connect(): Promise<void> {
     if (this.closed) throw new Error("RealtimeClient is closed");
-    this.onStateChange?.("connecting");
+    this.setState("connecting");
     await this.socket.waitForOpen();
     if (this.closed) throw new Error("RealtimeClient is closed");
     await this.transport.send({
@@ -156,7 +163,7 @@ export class RealtimeClient {
       deviceId: this.deviceId,
       capabilities: ["audio.pcm_s16le", "avatar.dynamic"],
     });
-    this.onStateChange?.("connected");
+    this.setState("connected");
   }
 
   async startListening(): Promise<void> {
@@ -214,7 +221,7 @@ export class RealtimeClient {
 
     this.closed = true;
     this.listening = false;
-    this.onStateChange?.("closed");
+    this.setState("closed");
 
     this.removeMessage?.();
     this.removeAudio?.();
