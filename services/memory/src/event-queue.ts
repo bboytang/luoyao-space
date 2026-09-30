@@ -102,7 +102,7 @@ export class PostgresMemoryEventQueue implements MemoryEventQueue {
         status = 'processing',
         attempts = q.attempts + 1,
         locked_at = $1::timestamptz,
-        locked_by = $2,
+        locked_by = $3,
         updated_at = $1::timestamptz
       FROM candidate
       WHERE q.event_id = candidate.event_id
