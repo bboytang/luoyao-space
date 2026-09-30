@@ -1,5 +1,6 @@
 import type { AvatarRenderer, AvatarState } from "./runtime";
 import { toAvatarRenderModel } from "./render-model";
+import { LUOYAO_AVATAR_CSS } from "./avatar-css";
 
 export interface DomAvatarRendererOptions {
   root: HTMLElement;
@@ -12,6 +13,7 @@ export class DomAvatarRenderer implements AvatarRenderer {
   private readonly face: HTMLDivElement;
   private readonly mouth: HTMLDivElement;
   private readonly status: HTMLDivElement;
+  private readonly style: HTMLStyleElement;
 
   constructor(options: DomAvatarRendererOptions) {
     this.root = options.root;
@@ -19,13 +21,17 @@ export class DomAvatarRenderer implements AvatarRenderer {
     this.face = document.createElement("div");
     this.mouth = document.createElement("div");
     this.status = document.createElement("div");
+    this.style = document.createElement("style");
 
     this.character.setAttribute("data-avatar", "luoyao");
     this.face.setAttribute("data-avatar-face", "true");
     this.mouth.setAttribute("data-avatar-mouth", "true");
     this.status.setAttribute("data-avatar-status", "true");
+    this.style.setAttribute("data-luoyao-avatar-style", "true");
+    this.style.textContent = LUOYAO_AVATAR_CSS;
 
     this.character.append(this.face, this.mouth, this.status);
+    if (!this.root.querySelector("[data-luoyao-avatar-style]")) this.root.appendChild(this.style);
     this.root.appendChild(this.character);
   }
 
@@ -45,5 +51,6 @@ export class DomAvatarRenderer implements AvatarRenderer {
 
   dispose(): void {
     this.character.remove();
+    if (this.style.parentElement === this.root && !this.root.querySelector("[data-avatar=\"luoyao\"]")) this.style.remove();
   }
 }
