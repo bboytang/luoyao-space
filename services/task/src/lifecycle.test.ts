@@ -93,6 +93,7 @@ describe("TaskLifecycleService", () => {
 
     const previous = { ...task, status: "WAITING_APPROVAL" as const, approvalStatus: "PENDING" as const };
     const next = { ...previous, status: "RUNNING" as const, approvalStatus: "APPROVED" as const, version: 2 };
+    await service.create(previous);
 
     await expect(service.persistTransition({
       previous,
