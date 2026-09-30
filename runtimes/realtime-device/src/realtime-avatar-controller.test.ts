@@ -65,6 +65,7 @@ describe("RealtimeAvatarController", () => {
     expect(getSpeaking()).toBe(false);
 
     controller.handleServerMessage({ type: "tts", state: "start", messageId: "m2" });
+    controller.handleServerMessage({ type: "tts", state: "start", messageId: "m1" });
     controller.handleAudioFrame();
 
     expect(getSpeaking()).toBe(true);
