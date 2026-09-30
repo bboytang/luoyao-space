@@ -56,7 +56,7 @@ describe("task state machine", () => {
       companionId: "companion-1",
       goal: "run an unapproved task",
       status: "WAITING_APPROVAL" as const,
-      plan: ["run"],
+      plan: [planStep],
       currentStep: 0,
       requiresApproval: true,
       approvalStatus: "PENDING" as const,
