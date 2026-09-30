@@ -50,6 +50,31 @@ describe("PcmPlaybackTimeline", () => {
     );
   });
 
+  it("can roll back the latest schedule", () => {
+    const timeline = new PcmPlaybackTimeline();
+
+    const first = timeline.schedule(pcmFrame(960), 10);
+    const second = timeline.schedule(pcmFrame(960), 10);
+
+    timeline.rollback(second);
+
+    expect(timeline.getEndTime()).toBe(first.endTime);
+    expect(timeline.schedule(pcmFrame(960), 10)).toEqual({
+      startTime: first.endTime,
+      endTime: first.endTime + 0.02,
+    });
+  });
+
+  it("rejects rollback of a non-latest schedule", () => {
+    const timeline = new PcmPlaybackTimeline();
+    const first = timeline.schedule(pcmFrame(960), 10);
+    timeline.schedule(pcmFrame(960), 10);
+
+    expect(() => timeline.rollback(first)).toThrow(
+      "PcmPlaybackTimeline can only roll back the latest schedule",
+    );
+  });
+
   it("can be reset for a new playback stream", () => {
     const timeline = new PcmPlaybackTimeline();
 
