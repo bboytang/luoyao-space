@@ -150,6 +150,7 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
   }
 
   getMouthOpenAt(timeSeconds: number): number {
+    this.lipSyncTimeline.pruneBefore(timeSeconds);
     return this.lipSyncTimeline.sampleAt(timeSeconds);
   }
 
