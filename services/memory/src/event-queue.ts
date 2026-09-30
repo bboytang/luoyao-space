@@ -91,7 +91,7 @@ export class PostgresMemoryEventQueue implements MemoryEventQueue {
           )
           OR (
             status = 'processing'
-            AND locked_at < $1::timestamptz
+            AND locked_at < $2::timestamptz
           )
         ORDER BY created_at
         FOR UPDATE SKIP LOCKED
@@ -109,6 +109,7 @@ export class PostgresMemoryEventQueue implements MemoryEventQueue {
       RETURNING q.event_id,q.event_type,q.payload,q.attempts,q.locked_by,q.locked_at::text`,
       [
         input.now,
+        expiredBefore,
         input.workerId,
       ],
     );
