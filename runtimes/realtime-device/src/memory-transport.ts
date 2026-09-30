@@ -9,7 +9,7 @@ import type {
 } from "./transport";
 
 type MessageHandler = (
-  message: RealtimeControlMessage,
+  message: RealtimeServerMessage,
 ) => void | Promise<void>;
 
 type AudioHandler = (frame: AudioFrame) => void | Promise<void>;
