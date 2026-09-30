@@ -60,6 +60,8 @@ describe("PostgresTaskRepository", () => {
       error: null,
       version: 1,
       created_at: task.createdAt,
+      execution_lease_id: null,
+      execution_lease_expires_at: null,
       updated_at: task.updatedAt,
     }]);
 
@@ -102,6 +104,8 @@ describe("PostgresTaskRepository", () => {
       error: null,
       version: 2,
       created_at: task.createdAt,
+      execution_lease_id: null,
+      execution_lease_expires_at: null,
       updated_at: "2026-09-30T01:00:00.000Z",
     }]);
 
@@ -126,3 +130,28 @@ describe("PostgresTaskRepository", () => {
     })).rejects.toBeInstanceOf(TaskConcurrencyError);
   });
 });
+
+
+  it("claims a step atomically with a lease", async () => {
+    const { client, calls } = fakeClient([{
+      task_id: "task-1", user_id: "user-1", companion_id: "luoyao",
+      goal: task.goal, status: "RUNNING", plan: task.plan, current_step: 0,
+      requires_approval: false, approval_status: null, device_id: "desktop-1",
+      execution_context: null, result: null, error: null, version: 2,
+      execution_lease_id: "lease-1",
+      execution_lease_expires_at: "2026-09-30T00:01:00.000Z",
+      created_at: task.createdAt, updated_at: "2026-09-30T00:00:00.000Z",
+    }]);
+
+    const repository = new PostgresTaskRepository(client);
+    const claimed = await repository.claimStep({
+      task, leaseId: "lease-1",
+      leaseExpiresAt: "2026-09-30T00:01:00.000Z",
+      now: "2026-09-30T00:00:00.000Z",
+    });
+
+    expect(claimed.executionLeaseId).toBe("lease-1");
+    expect(claimed.version).toBe(2);
+    expect(calls[0]?.text).toContain("execution_lease_id=$4");
+    expect(calls[0]?.text).toContain("execution_lease_expires_at <= $6::timestamptz");
+  });
