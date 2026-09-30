@@ -141,7 +141,7 @@ export class RealtimeClient {
     await this.transport.send({
       type: "listen",
       mode: "stop",
-    } as never);
+    });
     await this.input.stop();
   }
 
@@ -151,7 +151,7 @@ export class RealtimeClient {
     await this.transport.send({
       type: "abort",
       reason: "user_cancel",
-    } as never);
+    });
   }
 
   async close(): Promise<void> {
