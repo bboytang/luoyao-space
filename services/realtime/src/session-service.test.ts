@@ -138,6 +138,80 @@ describe("RealtimeSessionService", () => {
     ]);
     expect(connection.audio).toEqual([frame]);
   });
+
+  it("aborts an active pipeline without leaving the input queue open", async () => {
+    let stopped = false;
+    const blockingPipeline: AudioPipeline = {
+      ...pipeline,
+      asr: {
+        async *transcribe(frames, context) {
+          for await (const _frame of frames) {
+            while (!context.signal.aborted) await new Promise((resolve) => setTimeout(resolve, 1));
+            stopped = true;
+            return;
+          }
+        },
+      },
+      llm: { async *stream() {} },
+      tts: { async *synthesize() {} },
+    };
+
+    const connection = new FakeConnection();
+    new RealtimeSessionService(connection, blockingPipeline);
+
+    await connection.control({
+      type: "hello",
+      version: 1,
+      sessionId: "session-2",
+    });
+
+  it("waits for an aborted pipeline before accepting a new listen session", async () => {
+    let runs = 0;
+    let firstRunStopped = false;
+    const restartablePipeline: AudioPipeline = {
+      ...pipeline,
+      asr: {
+        async *transcribe(frames, context) {
+          runs += 1;
+          for await (const _frame of frames) {
+            if (runs === 1) {
+              while (!context.signal.aborted) await new Promise((resolve) => setTimeout(resolve, 1));
+              firstRunStopped = true;
+              return;
+            }
+            yield { type: "final", text: "hello again" as const };
+            return;
+          }
+        },
+      },
+    };
+
+    const connection = new FakeConnection();
+    new RealtimeSessionService(connection, restartablePipeline, {
+      createMessageId: () => "message-2",
+    });
+
+    await connection.control({ type: "hello", version: 1, sessionId: "session-3" });
+    await connection.control({ type: "listen", mode: "start" });
+    await connection.pushAudio(frame);
+    await connection.control({ type: "abort", reason: "user_cancel" });
+
+    expect(firstRunStopped).toBe(true);
+
+    await connection.control({ type: "listen", mode: "start" });
+    await connection.pushAudio(frame);
+    await connection.control({ type: "listen", mode: "stop" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(runs).toBe(2);
+    expect(connection.messages).not.toContainEqual({
+      type: "error",
+      code: "already_listening",
+      message: "A listen session is already active",
+      retryable: false,
+    });
+    expect(connection.messages).toContainEqual({ type: "stt", text: "hello again", final: true });
+  });
     await connection.control({ type: "listen", mode: "start" });
     await connection.pushAudio(frame);
     await connection.control({ type: "abort", reason: "user_cancel" });
