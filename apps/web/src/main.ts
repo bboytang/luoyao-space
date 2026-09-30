@@ -76,14 +76,37 @@ stopButton.textContent = "停止";
 stopButton.disabled = true;
 realtimePanel.append(realtimeUrl, connectButton, listenButton, stopButton, realtimeStatus);
 
+function setRealtimeUiState(state: "connecting" | "connected" | "closed"): void {
+  if (state === "connecting") {
+    connectButton.textContent = "连接中…";
+    connectButton.disabled = true;
+    listenButton.disabled = true;
+    stopButton.disabled = true;
+    realtimeStatus.textContent = "连接中…";
+    return;
+  }
+
+  if (state === "connected") {
+    connectButton.textContent = "断开";
+    connectButton.disabled = false;
+    listenButton.disabled = false;
+    stopButton.disabled = true;
+    realtimeStatus.textContent = "已连接";
+    return;
+  }
+
+  connectButton.textContent = "连接实时服务";
+  connectButton.disabled = false;
+  listenButton.disabled = true;
+  stopButton.disabled = true;
+  realtimeStatus.textContent = "未连接";
+}
+
 connectButton.addEventListener("click", async () => {
   if (realtimeClient) {
     await realtimeClient.close();
     realtimeClient = undefined;
-    connectButton.textContent = "连接实时服务";
-    listenButton.disabled = true;
-    stopButton.disabled = true;
-    realtimeStatus.textContent = "未连接";
+    setRealtimeUiState("closed");
     return;
   }
 
@@ -95,11 +118,17 @@ connectButton.addEventListener("click", async () => {
 
   try {
     realtimeStatus.textContent = "连接中…";
-    realtimeClient = new RealtimeClient({ url, avatar: runtime, input: capture, output: playback });
+    realtimeClient = new RealtimeClient({
+      url,
+      avatar: runtime,
+      input: capture,
+      output: playback,
+      onStateChange: (state) => {
+        setRealtimeUiState(state);
+        if (state === "closed") realtimeClient = undefined;
+      },
+    });
     await realtimeClient.connect();
-    connectButton.textContent = "断开";
-    listenButton.disabled = false;
-    realtimeStatus.textContent = "已连接";
   } catch (error) {
     await realtimeClient?.close().catch(() => undefined);
     realtimeClient = undefined;
