@@ -26,6 +26,14 @@ export async function* runAudioPipeline(
 
   const frames = new AudioFrameBuffer({ maxFrames: 256 });
 
+  const emitMetrics = () => context.onMetrics?.({ ...metrics });
+  const markOnce = (key: keyof PipelineMetrics, elapsedMs: number) => {
+    if (metrics[key] === undefined) {
+      metrics[key] = elapsedMs;
+      emitMetrics();
+    }
+  };
+
   let feederError: Error | undefined;
 
   const feeder = (async () => {
@@ -54,11 +62,13 @@ export async function* runAudioPipeline(
       }
 
       if (asrEvent.type === "partial") {
+        markOnce("asrFirstPartialMs", Date.now() - startedAt);
         yield { type: "stt", text: asrEvent.text };
         continue;
       }
 
       finalText = asrEvent.text;
+      markOnce("asrFinalMs", Date.now() - startedAt);
       yield { type: "stt", text: finalText };
     }
 
@@ -92,8 +102,13 @@ export async function* runAudioPipeline(
         return;
       }
 
+      if (llmEvent.type === "text_delta") {
+        markOnce("llmFirstTokenMs", Date.now() - startedAt);
+        continue;
+      }
       if (llmEvent.type !== "sentence") continue;
 
+      markOnce("firstSentenceMs", Date.now() - startedAt);
       const ttsEvents = pipeline.tts.synthesize(
         {
           messageId: crypto.randomUUID(),
@@ -109,6 +124,7 @@ export async function* runAudioPipeline(
         }
 
         if (ttsEvent.type === "audio") {
+          markOnce("ttsFirstAudioMs", Date.now() - startedAt);
           yield { type: "tts_audio", frame: ttsEvent.frame };
         }
       }
@@ -121,6 +137,7 @@ export async function* runAudioPipeline(
     }
 
     metrics.totalResponseMs = Date.now() - startedAt;
+    emitMetrics();
     yield { type: "completed" };
   } catch (error) {
     yield {
@@ -128,6 +145,7 @@ export async function* runAudioPipeline(
       error: error instanceof Error ? error : new Error(String(error)),
     };
   } finally {
+    emitMetrics();
     if (context.signal.aborted) {
       frames.end();
     } else {
