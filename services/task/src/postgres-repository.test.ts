@@ -141,7 +141,14 @@ describe("PostgresTaskRepository", () => {
   });
 
   it("distinguishes a non-running task from a lease conflict", async () => {
-    const { client } = fakeClient([taskRow({ status: "PAUSED" })]);
+    const calls: Array<{ text: string; values: readonly unknown[] }> = [];
+    const client = {
+      query: async <Row = unknown>(text: string, values: readonly unknown[] = []) => {
+        calls.push({ text, values });
+        if (text.startsWith("UPDATE tasks")) return { rows: [] as Row[] };
+        return { rows: [taskRow({ status: "PAUSED" }) as Row] };
+      },
+    };
     const repository = new PostgresTaskRepository(client);
 
     await expect(repository.claimStep({
@@ -150,5 +157,6 @@ describe("PostgresTaskRepository", () => {
       leaseExpiresAt: "2026-09-30T00:01:00.000Z",
       now: "2026-09-30T00:00:00.000Z",
     })).rejects.toBeInstanceOf(TaskLeaseError);
+    expect(calls).toHaveLength(2);
   });
 });
