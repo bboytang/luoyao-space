@@ -4,6 +4,7 @@ export interface AudioStreamContext {
   sessionId: string;
   conversationId: string;
   signal: AbortSignal;
+  onMetrics?: (metrics: Readonly<PipelineMetrics>) => void;
 }
 
 export interface VadProvider {
