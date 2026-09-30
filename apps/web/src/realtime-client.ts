@@ -2,7 +2,6 @@ import type { RealtimeAudioInput, RealtimeAudioOutput } from "../../../runtimes/
 import { binaryAudioCodec } from "../../../runtimes/realtime-device/src/binary-audio-codec";
 import type { AudioFrame } from "../../../runtimes/realtime-device/src/protocol";
 import { WebSocketTransport, type WebSocketLike } from "../../../runtimes/realtime-device/src/websocket-transport";
-import type { RealtimeServerMessage } from "../../../runtimes/realtime-device/src/protocol";
 import { RealtimeAvatarController } from "./realtime-avatar-controller";
 import { AvatarRuntime } from "../../../runtimes/avatar/src/runtime";
 
@@ -92,7 +91,6 @@ export class RealtimeClient {
     this.output = options.output;
     this.avatarController = new RealtimeAvatarController({
       avatar: options.avatar,
-      onAudio: (frame) => void this.output.play(frame),
     });
 
     this.removeMessage = this.transport.onMessage((message) => {
@@ -124,7 +122,7 @@ export class RealtimeClient {
       sessionId: this.sessionId,
       deviceId: this.deviceId,
       capabilities: ["audio.pcm_s16le", "avatar.dynamic"],
-    } as never);
+    });
   }
 
   async startListening(): Promise<void> {
