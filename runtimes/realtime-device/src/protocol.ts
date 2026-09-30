@@ -98,8 +98,6 @@ export interface AudioFrame {
   sampleRate: number;
   channels: number;
   sequence: number;
-  /** Monotonic presentation timestamp for the first sample in this frame, when known. */
-  timestampMs?: number;
   payload: Uint8Array;
 }
 
