@@ -9,5 +9,7 @@ export interface RealtimeAudioInput {
 
 export interface RealtimeAudioOutput {
   play(frame: AudioFrame): Promise<void>;
+  /** Resolves when all already-scheduled output audio has finished playing. */
+  waitForIdle?(): Promise<void>;
   stop(): Promise<void>;
 }
