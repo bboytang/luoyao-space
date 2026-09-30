@@ -93,17 +93,17 @@ export function createMemoryService(
       const startedAt = Date.now();
       try {
         const vector = await resolveEmbedding(input.content, input.embedding);
-      const persistedInput: CreateMemoryInput = {
-        ...input,
-        ...(vector ? { embedding: vector } : {}),
-      };
-      const memory = await repository.create(persistedInput);
-      await emit({
-        type: "memory.created",
-        userId: memory.userId,
-        companionId: memory.companionId,
-        data: { memoryId: memory.id, kind: memory.kind, importance: memory.importance },
-      });
+        const persistedInput: CreateMemoryInput = {
+          ...input,
+          ...(vector ? { embedding: vector } : {}),
+        };
+        const memory = await repository.create(persistedInput);
+        await emit({
+          type: "memory.created",
+          userId: memory.userId,
+          companionId: memory.companionId,
+          data: { memoryId: memory.id, kind: memory.kind, importance: memory.importance },
+        });
         metrics.increment("memory_write_success", 1, { operation: "remember" });
         metrics.observe("memory_write_duration_ms", Date.now() - startedAt, { operation: "remember" });
         return memory;
@@ -193,20 +193,20 @@ export function createMemoryService(
       const startedAt = Date.now();
       try {
         const vector = await resolveEmbedding(input.update.content, input.update.embedding);
-      const persistedUpdate: CreateMemoryInput = {
-        ...input.update,
-        ...(vector ? { embedding: vector } : {}),
-      };
-      const memory = await repository.replace({
-        ...input,
-        update: persistedUpdate,
-      });
-      await emit({
-        type: "memory.updated",
-        userId: memory.userId,
-        companionId: memory.companionId,
-        data: { memoryId: memory.id, kind: memory.kind, importance: memory.importance },
-      });
+        const persistedUpdate: CreateMemoryInput = {
+          ...input.update,
+          ...(vector ? { embedding: vector } : {}),
+        };
+        const memory = await repository.replace({
+          ...input,
+          update: persistedUpdate,
+        });
+        await emit({
+          type: "memory.updated",
+          userId: memory.userId,
+          companionId: memory.companionId,
+          data: { memoryId: memory.id, kind: memory.kind, importance: memory.importance },
+        });
         metrics.increment("memory_write_success", 1, { operation: "replace" });
         metrics.observe("memory_write_duration_ms", Date.now() - startedAt, { operation: "replace" });
         return memory;
@@ -221,12 +221,12 @@ export function createMemoryService(
       const startedAt = Date.now();
       try {
         await repository.remove(input);
-      await emit({
-        type: "memory.deleted",
-        userId: input.userId,
-        companionId: input.companionId,
-        data: { memoryId: input.memoryId },
-      });
+        await emit({
+          type: "memory.deleted",
+          userId: input.userId,
+          companionId: input.companionId,
+          data: { memoryId: input.memoryId },
+        });
         metrics.increment("memory_write_success", 1, { operation: "remove" });
         metrics.observe("memory_write_duration_ms", Date.now() - startedAt, { operation: "remove" });
       } catch (error) {
@@ -240,35 +240,35 @@ export function createMemoryService(
       const startedAt = Date.now();
       try {
         const queryEmbedding = embedding
-        ? (await embedding.embed({ text: input.query })).vector
-        : undefined;
+          ? (await embedding.embed({ text: input.query })).vector
+          : undefined;
 
-      if (queryEmbedding) validateEmbedding(queryEmbedding);
+        if (queryEmbedding) validateEmbedding(queryEmbedding);
 
-      const candidates = await repository.findCandidates({
-        userId: input.userId,
-        companionId: input.companionId,
-        query: input.query,
-        queryEmbedding,
-        limit: Math.max(input.limit * 4, input.limit),
-        now: input.now,
-        relationshipWeight: input.relationshipWeight ?? 1,
-        projectWeight: input.projectWeight ?? 1,
-      });
+        const candidates = await repository.findCandidates({
+          userId: input.userId,
+          companionId: input.companionId,
+          query: input.query,
+          queryEmbedding,
+          limit: Math.max(input.limit * 4, input.limit),
+          now: input.now,
+          relationshipWeight: input.relationshipWeight ?? 1,
+          projectWeight: input.projectWeight ?? 1,
+        });
 
-      const ranked = rankMemories(candidates, {
-        now: input.now,
-        query: input.query,
-        relationshipWeight: input.relationshipWeight ?? 1,
-        projectWeight: input.projectWeight ?? 1,
-      }).slice(0, input.limit);
+        const ranked = rankMemories(candidates, {
+          now: input.now,
+          query: input.query,
+          relationshipWeight: input.relationshipWeight ?? 1,
+          projectWeight: input.projectWeight ?? 1,
+        }).slice(0, input.limit);
 
-      if (ranked.length > 0) {
-        await repository.markAccessed(
-          ranked.map((memory) => memory.id),
-          input.now,
-        );
-      }
+        if (ranked.length > 0) {
+          await repository.markAccessed(
+            ranked.map((memory) => memory.id),
+            input.now,
+          );
+        }
 
         metrics.increment("memory_recall_success", 1, {
           result: ranked.length > 0 ? "hit" : "empty",
