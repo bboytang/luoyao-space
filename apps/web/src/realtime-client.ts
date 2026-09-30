@@ -95,6 +95,9 @@ export class RealtimeClient {
 
     this.removeMessage = this.transport.onMessage((message) => {
       this.avatarController.handleServerMessage(message);
+      if (message.type === "tts" && message.state === "stop") {
+        void this.output.waitForIdle?.().then(() => this.avatarController.handlePlaybackIdle());
+      }
     });
     this.removeAudio = this.transport.onAudio((frame) => {
       this.avatarController.handleAudioFrame();
