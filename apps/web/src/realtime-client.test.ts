@@ -256,6 +256,35 @@ describe("RealtimeClient", () => {
     expect(socket.close).toHaveBeenCalledTimes(1);
   });
 
+  it("reports connection state transitions once", async () => {
+    const states: string[] = [];
+    const socket = new FakeSocket();
+    const input = {
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const output = {
+      play: vi.fn().mockResolvedValue(undefined),
+      waitForIdle: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const avatar = new AvatarRuntime({ renderer: { render: vi.fn() } });
+    const client = new RealtimeClient({
+      url: "wss://example.test/realtime",
+      socket,
+      avatar,
+      input,
+      output,
+      onStateChange: (state) => states.push(state),
+    });
+
+    await client.connect();
+    socket.receiveClose(1000, "server closed", true);
+    await client.close();
+
+    expect(states).toEqual(["connecting", "connected", "closed"]);
+  });
+
   it("treats a remote socket close as a terminal lifecycle state", async () => {
     const { client, socket, input, output } = createClient();
 
