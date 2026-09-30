@@ -2,6 +2,8 @@ import { AvatarRuntime } from "../../../runtimes/avatar/src/runtime";
 import { DomAvatarRenderer } from "../../../runtimes/avatar/src/dom-renderer";
 import { BrowserPcmCapture, BrowserPcmPlayback } from "./browser-audio";
 import { RealtimeClient } from "./realtime-client";
+import { AvatarLipSyncDriver } from "./avatar-lip-sync";
+import { AvatarRenderLoop } from "./avatar-render-loop";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Luoyao Space app root is missing");
@@ -15,6 +17,16 @@ controls.className = "controls";
 
 const renderer = new DomAvatarRenderer({ root: avatarRoot });
 const runtime = new AvatarRuntime({ renderer });
+const lipSync = new AvatarLipSyncDriver(runtime, playback);
+const renderLoop = new AvatarRenderLoop(
+  {
+    request: (callback) => requestAnimationFrame(callback),
+    cancel: (handle) => cancelAnimationFrame(handle),
+  },
+  lipSync,
+  () => renderer.render(runtime.getState()),
+);
+renderLoop.start();
 
 function button(label: string, action: () => void): void {
   const element = document.createElement("button");
@@ -140,6 +152,7 @@ style.textContent = `
 document.head.appendChild(style);
 
 window.addEventListener("pagehide", () => {
+  renderLoop.stop();
   void realtimeClient?.close();
   runtime.dispose();
 });
