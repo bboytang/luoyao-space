@@ -3,7 +3,7 @@ import type { AudioFrame, RealtimeServerMessage } from "./protocol";
 import type { RealtimeTransport } from "./transport";
 import { DEFAULT_REALTIME_CAPABILITIES, type RealtimeCapability } from "./capabilities";
 
-export type RealtimeSessionState = "connecting" | "connected" | "closed";
+export type RealtimeClientSessionState = "connecting" | "connected" | "closed";
 
 export interface RealtimeAvatarControllerPort {
   handleServerMessage(message: RealtimeServerMessage): void;
@@ -21,7 +21,7 @@ export interface RealtimeSessionOptions {
   sessionId: string;
   deviceId?: string;
   capabilities?: RealtimeCapability[];
-  onStateChange?: (state: RealtimeSessionState) => void;
+  onStateChange?: (state: RealtimeClientSessionState) => void;
 }
 
 export class RealtimeSession {
@@ -31,7 +31,7 @@ export class RealtimeSession {
   private readonly avatar: RealtimeAvatarControllerPort;
   private readonly deviceId?: string;
   private readonly capabilities: RealtimeCapability[];
-  private readonly onStateChange?: (state: RealtimeSessionState) => void;
+  private readonly onStateChange?: (state: RealtimeClientSessionState) => void;
   private readonly sessionId: string;
   private removeMessage?: () => void;
   private removeAudio?: () => void;
@@ -39,7 +39,7 @@ export class RealtimeSession {
   private listening = false;
   private closed = false;
   private closePromise?: Promise<void>;
-  private state: RealtimeSessionState = "closed";
+  private state: RealtimeClientSessionState = "closed";
 
   constructor(options: RealtimeSessionOptions) {
     this.transport = options.transport;
@@ -167,7 +167,7 @@ export class RealtimeSession {
     this.removeClose = undefined;
   }
 
-  private setState(state: RealtimeSessionState): void {
+  private setState(state: RealtimeClientSessionState): void {
     if (this.state === state) return;
     this.state = state;
     this.onStateChange?.(state);
