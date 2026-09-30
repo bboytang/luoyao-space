@@ -2,12 +2,30 @@ import { describe, expect, it } from "vitest";
 import type { AudioPipeline } from "../../../runtimes/realtime-device/src/audio-pipeline";
 import { createDemoRealtimePipeline } from "./demo-pipeline";
 import {
+  createDefaultRealtimeProviderFactories,
   createRealtimePipeline,
   type RealtimeProviderConfig,
   type RealtimeProviderFactories,
 } from "./provider-registry";
 
 describe("createRealtimePipeline", () => {
+  it("registers OpenAI as the default LLM provider", () => {
+    const factories = createDefaultRealtimeProviderFactories();
+    const provider = factories.llm.openai?.({
+      apiKey: "test-key",
+      model: "test-model",
+    });
+
+    expect(provider).toBeDefined();
+  });
+
+  it("requires credentials when creating OpenAI", () => {
+    const factories = createDefaultRealtimeProviderFactories();
+
+    expect(() => factories.llm.openai?.({ model: "test-model" })).toThrow(
+      'Provider option "apiKey" is required',
+    );
+  });
   const factories: RealtimeProviderFactories = {
     vad: { demo: () => ({} as AudioPipeline["vad"]) },
     asr: { demo: () => ({} as AudioPipeline["asr"]) },
