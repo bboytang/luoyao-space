@@ -91,8 +91,8 @@ export class PostgresMemoryRepository implements MemoryRepository {
   async findCandidates(query: MemoryCandidateQuery): Promise<MemoryRecord[]> {
     const embedding = query.queryEmbedding ? vectorLiteral(query.queryEmbedding) : null;
     const result = await this.client.query<MemoryRow>(
-      "SELECT id,user_id,companion_id,kind,content,importance,relationship_relevance,project_relevance,created_at::text,last_accessed_at::text,CASE WHEN $6::vector IS NULL OR embedding IS NULL THEN 0 ELSE 1-(embedding <=> $6::vector) END AS embedding_score FROM memories WHERE user_id=$1 AND companion_id=$2 AND ($6::vector IS NOT NULL OR $3 = '' OR content ILIKE '%' || $3 || '%') ORDER BY CASE WHEN $6::vector IS NULL OR embedding IS NULL THEN 0 ELSE 1-(embedding <=> $6::vector) END DESC, created_at DESC LIMIT $4",
-      [query.userId, query.companionId, query.query.trim(), query.limit, query.now, embedding],
+      "SELECT id,user_id,companion_id,kind,content,importance,relationship_relevance,project_relevance,created_at::text,last_accessed_at::text,CASE WHEN $5::vector IS NULL OR embedding IS NULL THEN 0 ELSE 1-(embedding <=> $5::vector) END AS embedding_score FROM memories WHERE user_id=$1 AND companion_id=$2 AND ($5::vector IS NOT NULL OR $3 = '' OR content ILIKE '%' || $3 || '%') ORDER BY CASE WHEN $5::vector IS NULL OR embedding IS NULL THEN 0 ELSE 1-(embedding <=> $5::vector) END DESC, created_at DESC LIMIT $4",
+      [query.userId, query.companionId, query.query.trim(), query.limit, embedding],
     );
     return result.rows.map(toRecord);
   }

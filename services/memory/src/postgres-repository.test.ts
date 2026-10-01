@@ -55,8 +55,10 @@ describe("PostgresMemoryRepository", () => {
     const calls = query.mock.calls as unknown as QueryCall[];
     const sql = calls[0]?.[0] ?? "";
     const values = calls[0]?.[1] ?? [];
-    expect(sql).toContain("embedding <=> $6::vector");
-    expect(values[5]).toBe("[" + Array.from({ length: EMBEDDING_DIMENSION }, (_, index) => index / EMBEDDING_DIMENSION).join(",") + "]");
+    expect(sql).toContain("embedding <=> $5::vector");
+    expect(sql).not.toContain("$6");
+    expect(values).toHaveLength(5);
+    expect(values[4]).toBe("[" + Array.from({ length: EMBEDDING_DIMENSION }, (_, index) => index / EMBEDDING_DIMENSION).join(",") + "]");
   });
 
   it("does not issue an update for an empty access set", async () => {
@@ -109,6 +111,43 @@ describe("PostgresMemoryRepository", () => {
 });
 
 describe("PostgresMemoryRepository with PostgreSQL", () => {
+  it.skipIf(!databaseUrl)("executes candidate lookup without a query embedding", async () => {
+    const pool = new Pool({ connectionString: databaseUrl });
+    const client = await pool.connect();
+    const schema = `memory_candidates_${randomUUID().replaceAll("-", "")}`;
+
+    try {
+      await client.query(`CREATE SCHEMA "${schema}"`);
+      await client.query(`SET search_path TO "${schema}", public`);
+      await runMigrations(client);
+
+      const repository = new PostgresMemoryRepository(client);
+      const userId = randomUUID();
+      const companionId = randomUUID();
+      const created = await repository.create({
+        userId, companionId, kind: "fact", content: "Candidate lookup regression",
+      });
+      const candidates = await repository.findCandidates({
+        userId,
+        companionId,
+        query: "lookup regression",
+        limit: 10,
+        now: "2026-10-02T00:00:00.000Z",
+        relationshipWeight: 1,
+        projectWeight: 1,
+      });
+
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0]?.id).toBe(created.id);
+      expect(candidates[0]?.content).toBe("Candidate lookup regression");
+    } finally {
+      await client.query("RESET search_path");
+      await client.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+      client.release();
+      await pool.end();
+    }
+  });
+
   it.skipIf(!databaseUrl)("persists and reads a memory by projectId", async () => {
     const pool = new Pool({ connectionString: databaseUrl });
     const client = await pool.connect();
