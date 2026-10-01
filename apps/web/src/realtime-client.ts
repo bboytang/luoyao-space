@@ -124,6 +124,10 @@ export class RealtimeClient {
     await this.session.abort();
   }
 
+  async interruptResponse(): Promise<void> {
+    await this.session.interruptResponse();
+  }
+
   async close(): Promise<void> {
     await this.session.close();
   }
