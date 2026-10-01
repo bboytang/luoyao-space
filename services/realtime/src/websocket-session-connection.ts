@@ -29,6 +29,7 @@ export class WebSocketSessionConnection implements RealtimeSessionConnection {
   >();
   private readonly closeHandlers = new Set<() => void | Promise<void>>();
   private closed = false;
+  private controlTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly socket: ServerWebSocketLike) {
     socket.addEventListener("message", (event) => {
@@ -76,7 +77,11 @@ export class WebSocketSessionConnection implements RealtimeSessionConnection {
           this.socket.close(1002, "Invalid control message");
           return;
         }
-        for (const handler of this.controlHandlers) await handler(value);
+        const operation = this.controlTail.then(async () => {
+          for (const handler of this.controlHandlers) await handler(value);
+        });
+        this.controlTail = operation;
+        await operation;
         return;
       }
 
