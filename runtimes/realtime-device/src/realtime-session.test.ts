@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { RealtimeSession, type RealtimeAvatarControllerPort } from "./realtime-session";
+import type { RealtimeAudioInput } from "./audio-io";
 import type { RealtimeTransport } from "./transport";
 
 class FakeTransport implements RealtimeTransport {
@@ -232,7 +233,7 @@ describe("RealtimeSession", () => {
 
   it("holds input audio until barge-in handoff is acknowledged", async () => {
     const { session, input, transport } = createSession();
-    let onFrame!: (frame: Parameters<RealtimeTransport["onAudio"]>[0] extends (frame: infer F) => unknown ? F : never);
+    let onFrame!: Parameters<RealtimeAudioInput["start"]>[0] extends (frame: infer F) => unknown ? F : never;
     input.start.mockImplementationOnce(async (handler) => {
       onFrame = handler;
     });
