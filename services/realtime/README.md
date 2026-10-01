@@ -58,20 +58,29 @@ not persistent relationship history or a complete persona/safety system.
 The service rejects inbound and outbound PCM16 frames whose metadata or
 sample alignment differs from the negotiated format.
 
-## Explicit real voice configuration (M2-B)
+## Explicit real voice configuration (M2-B / M2-D1)
 
-The default demo providers never make external API calls. To select the real
-server-side path, set all of:
+The default demo providers never make external API calls. Real voice always
+selects `REALTIME_LLM_PROVIDER=brain`; ASR, the Brain model, and TTS are
+independent explicit selections. Each selected provider is validated at
+startup, and an unavailable provider fails closed rather than falling back to
+another external data destination. No new external provider is registered by
+M2-D1: OpenAI remains the only implemented external adapter for each stage.
+To select the existing OpenAI-backed server-side path, set:
 
 `REALTIME_ASR_PROVIDER=openai`, `REALTIME_LLM_PROVIDER=brain`,
 `REALTIME_TTS_PROVIDER=openai`, `REALTIME_BRAIN_MODEL_PROVIDER=openai`,
-`REALTIME_RELATIONSHIP_MODE=initial`, `OPENAI_API_KEY`, `OPENAI_ASR_MODEL`,
+`REALTIME_RELATIONSHIP_MODE=initial`, `OPENAI_ASR_MODEL`,
 `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_TTS_VOICE`,
-`REALTIME_COMPANION_ID`, and `DATABASE_URL`. Optional provider endpoints are
-`OPENAI_ASR_URL` and `OPENAI_BASE_URL`. The PostgreSQL schema must already have
-been migrated with `pnpm db:migrate`. A partial real-provider selection fails
-at configuration load; direct Realtime-to-OpenAI LLM generation remains only
-in explicit legacy v1 development mode, never the v2 real voice path.
+`REALTIME_COMPANION_ID`, `DATABASE_URL`, and credentials. The existing
+`OPENAI_API_KEY` remains a shared credential default. Alternatively,
+`OPENAI_ASR_API_KEY`, `OPENAI_BRAIN_API_KEY`, and `OPENAI_TTS_API_KEY` may supply
+independent stage credentials. Optional provider endpoints are
+`OPENAI_ASR_URL` and `OPENAI_BASE_URL`; `OPENAI_BRAIN_BASE_URL` and
+`OPENAI_TTS_BASE_URL` may override the latter per stage. The PostgreSQL schema
+must already have been migrated with `pnpm db:migrate`. Partial or unsupported
+real selections fail at startup; direct Realtime-to-OpenAI LLM generation
+remains only in explicit legacy v1 development mode, never the v2 real voice path.
 
 This does not add production authentication. The default v2 admission still
 fails closed without a trusted principal and device authorizer; the explicit
@@ -84,9 +93,9 @@ External data flow for this opt-in configuration:
 - Brain's external model receives only the current transcript and static Luoyao
   response instructions derived from the current behavior policy. It receives
   no user/device/session IDs, relationship snapshot, or retrieved long-term
-  memory. `MemoryIsolatedVoiceModel` constructs a fresh allowlist object before
-  any model provider is selected; the OpenAI provider independently constructs
-  its outbound body from that object.
+  memory. `MemoryIsolatedVoiceModel` constructs a fresh allowlist object and
+  Brain-owned Luoyao response instructions before any model provider is selected;
+  the OpenAI adapter constructs its outbound body only from that object.
 - TTS receives the generated reply text, selected model and voice. Its raw
   speech PCM is aligned at the provider boundary and emitted as 24 kHz mono
   little-endian signed PCM16. Empty, silent or malformed responses fail.
@@ -99,7 +108,7 @@ all retrieved long-term memory from external model requests.
 `pnpm realtime:smoke:live` is an explicit paid-provider smoke path, guarded by
 `M2B_LIVE_SMOKE=1` and the real configuration above plus a loopback development
 identity (`REALTIME_DEV_MODE=1`, `REALTIME_DEV_USER_ID`, `REALTIME_DEV_DEVICE_ID`).
-It synthesizes a repository-safe test phrase at runtime, then checks real ASR,
+It uses the selected TTS adapter to synthesize a repository-safe test phrase at runtime, then checks real ASR,
 Brain/model, TTS and non-silent output. It is not part of `pnpm test` or CI,
 does not save recordings, and does not test production authentication.
 

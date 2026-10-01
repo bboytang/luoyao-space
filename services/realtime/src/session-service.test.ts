@@ -108,7 +108,7 @@ describe("RealtimeSessionService", () => {
     const failed: AudioPipeline = {
       ...pipeline,
       asr: { async *transcribe(frames) {
-        for await (const _frame of frames) throw new Error("ASR upstream unavailable");
+        for await (const _frame of frames) throw new Error("Bearer secret-key https://provider.test/?token=secret-key private transcript");
       } },
     };
     new RealtimeSessionService(connection, failed, {
@@ -118,7 +118,8 @@ describe("RealtimeSessionService", () => {
     await connection.pushAudio(frame);
     await connection.control({ type: "listen", mode: "stop" });
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    expect(connection.messages).toContainEqual({ type: "error", code: "pipeline_error", message: "ASR upstream unavailable", retryable: true });
+    expect(connection.messages).toContainEqual({ type: "error", code: "pipeline_error", message: "Realtime provider failed", retryable: true });
+    expect(JSON.stringify(connection.messages)).not.toMatch(/secret-key|provider\.test|private transcript/);
   });
   it("emits fixture STT and TTS controls from an accepted v2 voice turn", async () => {
     const connection = new FakeConnection();

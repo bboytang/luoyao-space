@@ -40,3 +40,8 @@ Provider selection follows this order:
 3. if none exists, fail explicitly with a routing error.
 
 A provider failure is not silently converted into a successful response. Retry/failover policy belongs above the provider call so the system can distinguish transient availability from model output errors.
+
+The M2 real-voice external-data path selects exactly one Brain model provider
+explicitly. It does not use the general router's available-provider fallback
+to send a voice turn to another external destination without separate approval.
+`MemoryIsolatedVoiceModel` constructs provider-allowed context before routing.

@@ -5,7 +5,6 @@ import type { AudioStreamContext } from "../../../runtimes/realtime-device/src/a
 import { runAudioPipeline } from "../../../runtimes/realtime-device/src/pipeline-runner";
 import { loadRealtimeConfig } from "./config";
 import { createRealVoicePipeline } from "./real-voice-assembly";
-import { OpenAiTtsProvider } from "./providers/openai-tts";
 
 async function main(): Promise<void> {
   if (process.env.M2B_LIVE_SMOKE !== "1") {
@@ -27,8 +26,8 @@ async function main(): Promise<void> {
   };
   try {
     // Repository-safe spoken text is synthesized at runtime; no private recording is stored.
-    const source = new OpenAiTtsProvider({ apiKey: real.apiKey, model: real.ttsModel,
-      voice: real.ttsVoice, baseUrl: real.baseUrl });
+    const pipeline = createRealVoicePipeline(real, pool);
+    const source = pipeline.tts;
     const sample: AudioFrame[] = [];
     for await (const event of source.synthesize({ messageId: crypto.randomUUID(),
       text: "你好，洛瑶。这是一次语音链路测试，请简短地回答我。" }, context)) {
@@ -37,7 +36,6 @@ async function main(): Promise<void> {
     if (!sample.length || !sample.some((frame) => frame.payload.some((byte) => byte !== 0))) {
       throw new Error("Live speech input was empty or silent");
     }
-    const pipeline = createRealVoicePipeline(real, pool);
     let hasTranscript = false;
     let outputBytes = 0;
     let nonSilentOutput = false;

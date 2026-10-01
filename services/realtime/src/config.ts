@@ -1,3 +1,5 @@
+import type { ProviderSelection } from "./provider-registry";
+
 export interface RealtimeConfig {
   readonly host: string;
   readonly port: number;
@@ -13,15 +15,11 @@ export interface RealtimeConfig {
     readonly baseUrl?: string;
   };
   readonly realVoice?: {
-    readonly apiKey: string;
-    readonly asrModel: string;
-    readonly brainModel: string;
-    readonly ttsModel: string;
-    readonly ttsVoice: string;
+    readonly asr: ProviderSelection;
+    readonly model: ProviderSelection;
+    readonly tts: ProviderSelection;
     readonly companionId: string;
     readonly databaseUrl: string;
-    readonly asrUrl?: string;
-    readonly baseUrl?: string;
   };
   readonly development: {
     readonly enabled: boolean;
@@ -60,6 +58,11 @@ function readProvider(name: string, value: string | undefined): string {
 function readOptionalString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed || undefined;
+}
+
+function requireOpenAiOption(value: string | undefined, name: string): string {
+  if (!value) throw new Error(`${name} is required for the selected OpenAI provider`);
+  return value;
 }
 
 export function loadRealtimeConfig(
@@ -113,6 +116,9 @@ export function loadRealtimeConfig(
     }
   }
 
+  if (llm !== "demo" && llm !== "brain" && llm !== "openai") {
+    throw new Error("Unsupported realtime LLM provider; v2 real voice requires Brain");
+  }
   if (llm === "openai" && (!apiKey || !model)) {
     throw new Error("OPENAI_API_KEY and OPENAI_MODEL are required when REALTIME_LLM_PROVIDER=openai");
   }
@@ -120,28 +126,48 @@ export function loadRealtimeConfig(
     throw new Error("Direct OpenAI LLM is restricted to explicit v1 development compatibility; v2 voice requires Brain");
   }
 
-  const realSelected = asr === "openai" || llm === "brain" || tts === "openai";
+  const modelProvider = readOptionalString(env.REALTIME_BRAIN_MODEL_PROVIDER);
+  const realSelected = asr !== "demo" || llm === "brain" || tts !== "demo" || modelProvider !== undefined;
   let realVoice: RealtimeConfig["realVoice"];
   if (realSelected) {
-    if (asr !== "openai" || llm !== "brain" || tts !== "openai") {
-      throw new Error("A complete real voice provider set requires OpenAI ASR, Brain and OpenAI TTS");
-    }
-    if (env.REALTIME_BRAIN_MODEL_PROVIDER !== "openai") {
-      throw new Error("REALTIME_BRAIN_MODEL_PROVIDER=openai must be explicitly configured");
+    if (llm !== "brain" || asr === "demo" || tts === "demo" || !modelProvider) {
+      throw new Error("A complete real voice provider set requires ASR, Brain, REALTIME_BRAIN_MODEL_PROVIDER and TTS selections");
     }
     if (env.REALTIME_RELATIONSHIP_MODE !== "initial") {
       throw new Error("REALTIME_RELATIONSHIP_MODE=initial must be explicitly configured for the M2-B first-turn context");
     }
-    const asrModel = readOptionalString(env.OPENAI_ASR_MODEL);
-    const ttsModel = readOptionalString(env.OPENAI_TTS_MODEL);
-    const ttsVoice = readOptionalString(env.OPENAI_TTS_VOICE);
     const companionId = readOptionalString(env.REALTIME_COMPANION_ID);
     const databaseUrl = readOptionalString(env.DATABASE_URL);
-    if (!apiKey || !model || !asrModel || !ttsModel || !ttsVoice || !companionId || !databaseUrl) {
-      throw new Error("Real voice requires OPENAI_API_KEY, OPENAI_MODEL, OPENAI_ASR_MODEL, OPENAI_TTS_MODEL, OPENAI_TTS_VOICE, REALTIME_COMPANION_ID and DATABASE_URL");
+    if (!companionId || !databaseUrl) {
+      throw new Error("Real voice requires REALTIME_COMPANION_ID and DATABASE_URL");
     }
-    realVoice = { apiKey, asrModel, brainModel: model, ttsModel, ttsVoice, companionId, databaseUrl,
-      asrUrl: readOptionalString(env.OPENAI_ASR_URL), baseUrl: readOptionalString(env.OPENAI_BASE_URL) };
+    if (asr !== "openai") throw new Error(`Unsupported ASR provider: ${asr}`);
+    if (modelProvider !== "openai") {
+      throw new Error("Unsupported REALTIME_BRAIN_MODEL_PROVIDER");
+    }
+    if (tts !== "openai") throw new Error(`Unsupported TTS provider: ${tts}`);
+    realVoice = {
+      asr: { provider: asr, options: {
+        apiKey: requireOpenAiOption(readOptionalString(env.OPENAI_ASR_API_KEY) ?? apiKey,
+          "OPENAI_ASR_API_KEY or OPENAI_API_KEY"),
+        model: requireOpenAiOption(readOptionalString(env.OPENAI_ASR_MODEL), "OPENAI_ASR_MODEL"),
+        url: readOptionalString(env.OPENAI_ASR_URL),
+      } },
+      model: { provider: modelProvider, options: {
+        apiKey: requireOpenAiOption(readOptionalString(env.OPENAI_BRAIN_API_KEY) ?? apiKey,
+          "OPENAI_BRAIN_API_KEY or OPENAI_API_KEY"),
+        model: requireOpenAiOption(model, "OPENAI_MODEL"),
+        baseUrl: readOptionalString(env.OPENAI_BRAIN_BASE_URL) ?? readOptionalString(env.OPENAI_BASE_URL),
+      } },
+      tts: { provider: tts, options: {
+        apiKey: requireOpenAiOption(readOptionalString(env.OPENAI_TTS_API_KEY) ?? apiKey,
+          "OPENAI_TTS_API_KEY or OPENAI_API_KEY"),
+        model: requireOpenAiOption(readOptionalString(env.OPENAI_TTS_MODEL), "OPENAI_TTS_MODEL"),
+        voice: requireOpenAiOption(readOptionalString(env.OPENAI_TTS_VOICE), "OPENAI_TTS_VOICE"),
+        baseUrl: readOptionalString(env.OPENAI_TTS_BASE_URL) ?? readOptionalString(env.OPENAI_BASE_URL),
+      } },
+      companionId, databaseUrl,
+    };
   }
 
   return {

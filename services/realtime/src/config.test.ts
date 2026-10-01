@@ -14,8 +14,8 @@ describe("loadRealtimeConfig", () => {
     });
   });
 
-  it("loads provider selections without exposing secrets", () => {
-    expect(
+  it("rejects incomplete direct provider selections without exposing unrelated secrets", () => {
+    expect(() =>
       loadRealtimeConfig({
         REALTIME_HOST: "0.0.0.0",
         REALTIME_PORT: "9000",
@@ -25,15 +25,7 @@ describe("loadRealtimeConfig", () => {
         REALTIME_TTS_PROVIDER: "cloud_tts",
         CLOUD_LLM_API_KEY: "should-not-be-read",
       }),
-    ).toEqual({
-      host: "0.0.0.0",
-      port: 9000,
-      providers: { vad: "demo", asr: "cloud_asr", llm: "cloud_llm", tts: "cloud_tts" },
-      openai: undefined,
-      realVoice: undefined,
-      development: { enabled: false, legacyV1: false, identity: undefined },
-      physicalDevelopment: undefined,
-    });
+    ).toThrow(/Brain|unsupported/i);
   });
 
   it("loads OpenAI credentials only when supplied", () => {
@@ -77,13 +69,43 @@ describe("loadRealtimeConfig", () => {
       REALTIME_COMPANION_ID: "luoyao", DATABASE_URL: "postgresql://example.test/luoyao",
     };
     expect(loadRealtimeConfig(real).realVoice).toMatchObject({
-      asrModel: "asr-model", brainModel: "brain-model", ttsModel: "tts-model", ttsVoice: "alloy",
+      asr: { provider: "openai", options: { model: "asr-model" } },
+      model: { provider: "openai", options: { model: "brain-model" } },
+      tts: { provider: "openai", options: { model: "tts-model", voice: "alloy" } },
       companionId: "luoyao", databaseUrl: "postgresql://example.test/luoyao",
     });
     expect(() => loadRealtimeConfig({ ...real, OPENAI_API_KEY: "" })).toThrow(/OPENAI_API_KEY/);
     expect(() => loadRealtimeConfig({ ...real, REALTIME_TTS_PROVIDER: "demo" })).toThrow(/complete real voice/i);
     expect(() => loadRealtimeConfig({ ...real, REALTIME_BRAIN_MODEL_PROVIDER: "" })).toThrow(/BRAIN_MODEL_PROVIDER/);
     expect(() => loadRealtimeConfig({ REALTIME_LLM_PROVIDER: "openai", OPENAI_API_KEY: "key", OPENAI_MODEL: "m" })).toThrow(/v1 development/i);
+  });
+
+  it("keeps stage-specific credentials independent while preserving legacy OpenAI configuration", () => {
+    const config = loadRealtimeConfig({
+      REALTIME_ASR_PROVIDER: "openai", REALTIME_LLM_PROVIDER: "brain", REALTIME_TTS_PROVIDER: "openai",
+      REALTIME_BRAIN_MODEL_PROVIDER: "openai", REALTIME_RELATIONSHIP_MODE: "initial",
+      OPENAI_ASR_API_KEY: "asr-key", OPENAI_BRAIN_API_KEY: "brain-key", OPENAI_TTS_API_KEY: "tts-key",
+      OPENAI_ASR_MODEL: "asr-model", OPENAI_MODEL: "brain-model", OPENAI_TTS_MODEL: "tts-model",
+      OPENAI_TTS_VOICE: "voice", REALTIME_COMPANION_ID: "luoyao", DATABASE_URL: "postgresql://example.test/luoyao",
+    });
+    expect(config.realVoice).toMatchObject({
+      asr: { provider: "openai", options: { apiKey: "asr-key" } },
+      model: { provider: "openai", options: { apiKey: "brain-key" } },
+      tts: { provider: "openai", options: { apiKey: "tts-key" } },
+    });
+  });
+
+  it("rejects unsupported real providers and a direct v2 external LLM", () => {
+    const base = { REALTIME_ASR_PROVIDER: "openai", REALTIME_LLM_PROVIDER: "brain",
+      REALTIME_TTS_PROVIDER: "openai", REALTIME_BRAIN_MODEL_PROVIDER: "openai",
+      REALTIME_RELATIONSHIP_MODE: "initial", OPENAI_API_KEY: "key", OPENAI_ASR_MODEL: "asr",
+      OPENAI_MODEL: "brain", OPENAI_TTS_MODEL: "tts", OPENAI_TTS_VOICE: "voice",
+      REALTIME_COMPANION_ID: "luoyao", DATABASE_URL: "postgresql://example.test/luoyao" };
+    expect(() => loadRealtimeConfig({ ...base, REALTIME_ASR_PROVIDER: "missing" })).toThrow(/unsupported.*ASR/i);
+    expect(() => loadRealtimeConfig({ ...base, REALTIME_BRAIN_MODEL_PROVIDER: "missing" })).toThrow(/unsupported.*BRAIN_MODEL_PROVIDER/i);
+    expect(() => loadRealtimeConfig({ ...base, REALTIME_TTS_PROVIDER: "missing" })).toThrow(/unsupported.*TTS/i);
+    expect(() => loadRealtimeConfig({ ...base, REALTIME_LLM_PROVIDER: "other_llm" })).toThrow(/Brain/i);
+    expect(() => loadRealtimeConfig({ REALTIME_LLM_PROVIDER: "other_llm" })).toThrow(/Brain/i);
   });
 
   it("rejects invalid ports", () => {
@@ -141,5 +163,19 @@ describe("loadRealtimeConfig", () => {
     catch (error) { message = (error as Error).message; }
     expect(message).toBeTruthy();
     expect(message).not.toContain(secret);
+  });
+
+  it("never echoes an invalid Brain model selection that could contain a secret", () => {
+    const selection = "https://provider.test/?token=private";
+    let message = "";
+    try { loadRealtimeConfig({
+      REALTIME_ASR_PROVIDER: "openai", REALTIME_LLM_PROVIDER: "brain", REALTIME_TTS_PROVIDER: "openai",
+      REALTIME_BRAIN_MODEL_PROVIDER: selection, REALTIME_RELATIONSHIP_MODE: "initial",
+      REALTIME_COMPANION_ID: "luoyao", DATABASE_URL: "postgresql://example.test/luoyao",
+    }); }
+    catch (error) { message = (error as Error).message; }
+    expect(message).toMatch(/BRAIN_MODEL_PROVIDER/);
+    expect(message).not.toContain(selection);
+    expect(message).not.toContain("private");
   });
 });

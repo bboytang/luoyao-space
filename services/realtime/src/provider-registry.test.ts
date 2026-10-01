@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AudioPipeline } from "../../../runtimes/realtime-device/src/audio-pipeline";
+import { runAudioPipeline } from "../../../runtimes/realtime-device/src/pipeline-runner";
 import { createDemoRealtimePipeline } from "./demo-pipeline";
 import {
   createDefaultRealtimeProviderFactories,
@@ -9,6 +10,24 @@ import {
 } from "./provider-registry";
 
 describe("createRealtimePipeline", () => {
+  it("runs the default demo path without external provider credentials", async () => {
+    const selected: RealtimeProviderConfig = {
+      vad: { provider: "demo" }, asr: { provider: "demo" },
+      llm: { provider: "demo" }, tts: { provider: "demo" },
+    };
+    const pipeline = createRealtimePipeline(selected, createDefaultRealtimeProviderFactories());
+    const input = (async function* () {
+      yield { kind: "audio" as const, codec: "pcm_s16le" as const, sampleRate: 24_000,
+        channels: 1, sequence: 0, payload: new Uint8Array([1, 0]) };
+    })();
+    const outputs = [];
+    for await (const output of runAudioPipeline(pipeline, input, {
+      sessionId: "demo-session", conversationId: "demo-conversation", signal: new AbortController().signal,
+    })) outputs.push(output);
+    expect(outputs).toContainEqual({ type: "stt", text: "你好", final: true });
+    expect(outputs.some((output) => output.type === "tts_audio")).toBe(true);
+    expect(outputs.at(-1)).toEqual({ type: "completed" });
+  });
   it("offers real ASR and TTS only with explicit credentials and keeps Brain injection required", () => {
     const factories = createDefaultRealtimeProviderFactories();
     expect(() => factories.asr.openai?.({ model: "asr" })).toThrow(/apiKey/i);

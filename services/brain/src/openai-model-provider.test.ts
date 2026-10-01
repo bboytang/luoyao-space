@@ -4,6 +4,7 @@ import type { VoiceModelContext } from "./voice-model-boundary";
 
 const turn: VoiceModelContext & Record<string, unknown> = {
   transcript: "你好", responseLength: "very_short", responseTone: "calm",
+  instructions: "APPROVED_BRAIN_INSTRUCTIONS",
   memories: [{ id: "private-memory-id", content: "PRIVATE_LONG_TERM_MEMORY_SENTINEL", relevance: 0.8 }],
   relationship: { stage: "close", userInitiative: 0.7 },
 };
@@ -24,8 +25,7 @@ describe("OpenAiBrainModelProvider privacy boundary", () => {
     expect(url).toBe("https://api.openai.com/v1/responses");
     const body = JSON.parse(String(init.body));
     expect(body).toMatchObject({ model: "test-model", input: "你好", store: false });
-    expect(body.instructions).toContain("洛瑶");
-    expect(body.instructions).toContain("简短");
+    expect(body.instructions).toBe("APPROVED_BRAIN_INSTRUCTIONS");
     expect(String(init.body)).not.toMatch(/PRIVATE_LONG_TERM_MEMORY_SENTINEL|private-memory-id|close|userInitiative|userId|deviceId|sessionId/);
     expect(init.headers).toMatchObject({ authorization: "Bearer test-key" });
   });

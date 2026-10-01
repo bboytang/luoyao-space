@@ -282,7 +282,7 @@ export class RealtimeSessionService {
 
         if (output.type === "error") {
           await this.finishTts();
-          await this.sendError("pipeline_error", output.error?.message ?? "Realtime provider failed", true);
+          await this.sendError("pipeline_error", "Realtime provider failed", true);
           continue;
         }
 
@@ -294,7 +294,7 @@ export class RealtimeSessionService {
       await this.finishTts();
       await this.sendError(
         "pipeline_error",
-        error instanceof Error ? error.message : String(error),
+        "Realtime provider failed",
         true,
       );
     } finally {

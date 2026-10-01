@@ -6,12 +6,19 @@ import { createMemoryService } from "../../memory/src/service";
 import { PostgresMemoryRepository, type SqlClient } from "../../memory/src/postgres-repository";
 import { BrainLlmProvider } from "./brain-llm";
 import type { RealtimeConfig } from "./config";
-import { createDefaultRealtimeProviderFactories, createRealtimePipeline } from "./provider-registry";
+import { createDefaultRealtimeProviderFactories, createRealtimePipeline,
+  type ProviderOptions, type RealtimeProviderFactories } from "./provider-registry";
 
 export interface RealVoiceProviderBoundaries {
-  readonly asr?: AsrProvider;
-  readonly model?: ModelProvider;
-  readonly tts?: TtsProvider;
+  readonly asr?: Readonly<Record<string, (options?: ProviderOptions) => AsrProvider>>;
+  readonly model?: Readonly<Record<string, (options?: ProviderOptions) => ModelProvider>>;
+  readonly tts?: Readonly<Record<string, (options?: ProviderOptions) => TtsProvider>>;
+}
+
+function requiredOption(options: ProviderOptions | undefined, name: string): string {
+  const value = options?.[name];
+  if (typeof value !== "string" || !value.trim()) throw new Error(`Brain model option "${name}" is required`);
+  return value;
 }
 
 export function createRealVoicePipeline(
@@ -19,9 +26,19 @@ export function createRealVoicePipeline(
   database: SqlClient,
   providers: RealVoiceProviderBoundaries = {},
 ): AudioPipeline {
-  const modelProvider = providers.model ?? new OpenAiBrainModelProvider({
-    apiKey: config.apiKey, model: config.brainModel, baseUrl: config.baseUrl,
-  });
+  const modelFactories: Record<string, (options?: ProviderOptions) => ModelProvider> = {
+    openai: (options) => new OpenAiBrainModelProvider({
+      apiKey: requiredOption(options, "apiKey"), model: requiredOption(options, "model"),
+      baseUrl: typeof options?.baseUrl === "string" ? options.baseUrl : undefined,
+    }),
+    ...providers.model,
+  };
+  const modelFactory = modelFactories[config.model.provider];
+  if (!modelFactory) throw new Error(`Unsupported Brain model provider: ${config.model.provider}`);
+  const modelProvider = modelFactory(config.model.options);
+  if (!modelProvider.supports.includes("fast_chat")) {
+    throw new Error("Selected Brain model provider does not support fast_chat");
+  }
   const brain = new BrainLlmProvider(config.companionId, {
     memory: createMemoryService(new PostgresMemoryRepository(database)),
     // Explicit first-turn-only relationship baseline; no persistent relationship source is claimed.
@@ -29,16 +46,15 @@ export function createRealVoicePipeline(
     model: new MemoryIsolatedVoiceModel(new DefaultModelRouter([modelProvider], { fast_chat: modelProvider.id })),
   });
   const defaults = createDefaultRealtimeProviderFactories(brain);
-  const factories = {
+  const factories: RealtimeProviderFactories = {
     ...defaults,
-    asr: { ...defaults.asr, ...(providers.asr ? { openai: () => providers.asr! } : {}) },
-    tts: { ...defaults.tts, ...(providers.tts ? { openai: () => providers.tts! } : {}) },
+    asr: { ...defaults.asr, ...providers.asr },
+    tts: { ...defaults.tts, ...providers.tts },
   };
   return createRealtimePipeline({
     vad: { provider: "demo" }, // Push-to-talk controls endpointing in M2-B.
-    asr: { provider: "openai", options: { apiKey: config.apiKey, model: config.asrModel, url: config.asrUrl } },
+    asr: config.asr,
     llm: { provider: "brain" },
-    tts: { provider: "openai", options: { apiKey: config.apiKey, model: config.ttsModel,
-      voice: config.ttsVoice, baseUrl: config.baseUrl } },
+    tts: config.tts,
   }, factories);
 }
