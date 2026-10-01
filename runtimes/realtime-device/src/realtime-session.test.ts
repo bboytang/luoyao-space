@@ -207,10 +207,11 @@ describe("RealtimeSession", () => {
     await session.startListening();
     const interrupt = session.interruptResponse();
 
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(output.stop).toHaveBeenCalledTimes(1);
+    });
 
     expect(input.stop).not.toHaveBeenCalled();
-    expect(output.stop).toHaveBeenCalledTimes(1);
     expect(avatar.handleAborted).toHaveBeenCalledTimes(1);
     expect(transport.send).toHaveBeenNthCalledWith(2, {
       type: "abort",
