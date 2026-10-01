@@ -30,6 +30,22 @@ private struct DeviceSessionView: View {
                 Text("Device ID is not authentication. Server admission remains fail-closed.")
                     .font(.footnote)
             }
+            Section("Native voice · push to talk") {
+                Text(client.microphoneStatus)
+                Button("Allow microphone") { Task { await client.requestMicrophonePermission() } }
+                Button("Start speaking") { Task { await client.startListening() } }
+                    .disabled(client.state != .accepted || !client.canListen)
+                Button("Stop speaking") { Task { await client.stopListening() } }
+                    .disabled(client.state != .accepted || !client.canListen)
+                Button("Cancel turn") { Task { await client.cancelTurn() } }
+                    .disabled(client.state != .accepted)
+                Text(client.voiceStatus)
+                if !client.transcript.isEmpty { Text("Heard: \(client.transcript)") }
+                Text(client.canPlay ? "Native playback negotiated" : "Native playback not negotiated")
+                    .font(.footnote)
+                Text("During playback, Start stops local sound, cancels the old turn, waits for its end, then opens a new turn. This is not server-side barge-in.")
+                    .font(.footnote)
+            }
         }
     }
 }

@@ -19,6 +19,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: space.luoyao.ios
         GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Luoyao uses the microphone only while you start a voice turn."
         TARGETED_DEVICE_FAMILY: "1"
   LuoyaoIOSTests:
     type: bundle.unit-test
