@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import type { AudioPipeline } from "../../../runtimes/realtime-device/src/audio-pipeline";
 import type {
   AudioFrame,
@@ -9,6 +10,9 @@ import {
   RealtimeSessionService,
   type RealtimeSessionConnection,
 } from "./session-service";
+import { createDemoRealtimePipeline } from "./demo-pipeline";
+
+const wireFixture = JSON.parse(readFileSync(new URL("../../../packages/protocol/src/m2-wire-fixtures.json", import.meta.url), "utf8"));
 
 const frame: AudioFrame = {
   kind: "audio",
@@ -99,6 +103,20 @@ const pipeline: AudioPipeline = {
 };
 
 describe("RealtimeSessionService", () => {
+  it("emits fixture STT and TTS controls from an accepted v2 voice turn", async () => {
+    const connection = new FakeConnection();
+    new RealtimeSessionService(connection, createDemoRealtimePipeline(), {
+      admittedSessionId: "transport-1", createMessageId: () => "message-1",
+      trustedIdentity: { userId: "user-1", authorizedDeviceId: "ios-device-1" },
+    });
+    await connection.control(wireFixture.clientControls[0]);
+    await connection.pushAudio(frame);
+    await connection.control(wireFixture.clientControls[2]);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(connection.messages.filter((message) => message.type === "stt" || message.type === "tts"))
+      .toEqual(wireFixture.serverControls.slice(0, 4));
+    expect(connection.audio).toHaveLength(1);
+  });
   it("bridges control, audio, ASR and TTS through the provider-neutral protocol", async () => {
     const connection = new FakeConnection();
     new RealtimeSessionService(connection, pipeline, {

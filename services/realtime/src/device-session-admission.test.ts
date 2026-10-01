@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AudioPipeline } from "../../../runtimes/realtime-device/src/audio-pipeline";
+import type { AudioPipeline, AudioStreamContext } from "../../../runtimes/realtime-device/src/audio-pipeline";
 import type { DeviceCapabilityOffer, DeviceSessionHelloV2 } from "../../../packages/protocol/src/device-session";
 import { binaryAudioCodec } from "../../../runtimes/realtime-device/src/binary-audio-codec";
 import { InMemoryDeviceSessionOwnership } from "../../device-runtime/src/session-boundary";
 import type { ServerWebSocketLike } from "./websocket-session-connection";
 import { DeviceSessionAdmission } from "./device-session-admission";
+import { createBrainTurnSeed } from "./brain-context";
 
 class FakeSocket implements ServerWebSocketLike {
   readonly sent: Array<string | Uint8Array> = [];
@@ -51,25 +52,34 @@ function createHarness(options: {
   ownership?: InMemoryDeviceSessionOwnership;
   transportSessionId?: string;
   connectionId?: string;
+  finalTranscript?: string;
+  ttsFrame?: import("../../../runtimes/realtime-device/src/protocol").AudioFrame;
 } = {}) {
   const socket = new FakeSocket();
   const ownership = options.ownership ?? new InMemoryDeviceSessionOwnership();
   const receivedFrames = vi.fn();
+  const llmContexts: AudioStreamContext[] = [];
   const pipeline: AudioPipeline = {
     vad: { detect: async () => ({ speech: false, startOfSpeech: false, endOfSpeech: false }) },
     asr: { async *transcribe(frames) {
       for await (const frame of frames) {
         receivedFrames(frame);
+        if (options.finalTranscript) yield { type: "final" as const, text: options.finalTranscript };
         return;
       }
     } },
-    llm: { async *stream() {} },
-    tts: { async *synthesize() {} },
+    llm: { async *stream(_input, context) {
+      llmContexts.push(context);
+      if (options.ttsFrame) yield { type: "sentence" as const, text: "reply" };
+    } },
+    tts: { async *synthesize() {
+      if (options.ttsFrame) yield { type: "audio" as const, frame: options.ttsFrame };
+    } },
   };
   const authorization = vi.fn(async (_principal: { userId: string }, deviceId: string) =>
     deviceId === (options.authorizedDeviceId === undefined ? "device-1" : options.authorizedDeviceId)
       ? { userId: "user-1", deviceId } : null);
-  new DeviceSessionAdmission(socket, pipeline, {
+  const admission = new DeviceSessionAdmission(socket, pipeline, {
     resolvePrincipal: async () => options.principal === undefined ? { userId: "user-1" } : options.principal,
     authorizeDevice: authorization,
     ownership,
@@ -78,10 +88,83 @@ function createHarness(options: {
     createConnectionId: () => options.connectionId ?? "connection-1",
     createConversationId: () => "conversation-1",
   });
-  return { socket, ownership, receivedFrames, authorization, pipeline };
+  return { socket, ownership, receivedFrames, authorization, pipeline, admission, llmContexts };
 }
 
 describe("v2 realtime device admission", () => {
+  it("rejects an outbound TTS frame outside the negotiated audio format", async () => {
+    const { socket, admission } = createHarness({ serverCapabilities: voiceCapabilities });
+    await socket.receive(JSON.stringify(hello({
+      supportedCapabilities: voiceCapabilities, availableCapabilities: voiceCapabilities,
+    })));
+    expect(socket.controls()[0]).toMatchObject({ type: "device.accepted" });
+    await expect(admission.sendAudio({
+      kind: "audio", codec: "opus", sampleRate: 48_000, channels: 2,
+      sequence: 0, payload: new Uint8Array([1, 2]),
+    })).rejects.toThrow(/format/i);
+    expect(socket.closes).toEqual([{ code: 1002, reason: "Unnegotiated output audio format" }]);
+    expect(socket.sent.filter((item) => item instanceof Uint8Array)).toHaveLength(0);
+  });
+  it("sends a negotiated 24 kHz mono PCM16 output frame", async () => {
+    const { socket, admission } = createHarness({ serverCapabilities: voiceCapabilities });
+    await socket.receive(JSON.stringify(hello({
+      supportedCapabilities: voiceCapabilities, availableCapabilities: voiceCapabilities,
+    })));
+    const frame = { kind: "audio" as const, codec: "pcm_s16le" as const,
+      sampleRate: 24_000, channels: 1, sequence: 0, payload: new Uint8Array([0, 1]) };
+    await admission.sendAudio(frame);
+    expect(socket.sent.filter((item) => item instanceof Uint8Array)).toEqual([binaryAudioCodec.encodeAudio(frame)]);
+    expect(socket.closes).toHaveLength(0);
+  });
+  it("rejects odd-length PCM16 output payloads without sending them", async () => {
+    const { socket, admission } = createHarness({ serverCapabilities: voiceCapabilities });
+    await socket.receive(JSON.stringify(hello({
+      supportedCapabilities: voiceCapabilities, availableCapabilities: voiceCapabilities,
+    })));
+    await expect(admission.sendAudio({ kind: "audio", codec: "pcm_s16le", sampleRate: 24_000,
+      channels: 1, sequence: 0, payload: new Uint8Array([0]) })).rejects.toThrow(/format/i);
+    expect(socket.sent.filter((item) => item instanceof Uint8Array)).toHaveLength(0);
+  });
+  it("terminates an accepted voice session when its TTS provider emits an unnegotiated frame", async () => {
+    const { socket, ownership } = createHarness({
+      serverCapabilities: voiceCapabilities, finalTranscript: "spoken input",
+      ttsFrame: { kind: "audio", codec: "opus", sampleRate: 48_000, channels: 1,
+        sequence: 0, payload: new Uint8Array([1, 2]) },
+    });
+    await socket.receive(JSON.stringify(hello({
+      supportedCapabilities: voiceCapabilities, availableCapabilities: voiceCapabilities,
+    })));
+    await socket.receive(JSON.stringify({ type: "listen", mode: "start" }));
+    await socket.receive(binaryAudioCodec.encodeAudio({ kind: "audio", codec: "pcm_s16le",
+      sampleRate: 24_000, channels: 1, sequence: 0, payload: new Uint8Array([0, 0]) }));
+    await socket.receive(JSON.stringify({ type: "listen", mode: "stop" }));
+    await vi.waitFor(() => expect(socket.closes).toContainEqual({ code: 1002, reason: "Unnegotiated output audio format" }));
+    expect(socket.sent.filter((item) => item instanceof Uint8Array)).toHaveLength(0);
+    expect(ownership.get("transport-1")?.state).toBe("ended");
+  });
+  it("passes only admitted server identity into the future Brain turn boundary", async () => {
+    const { socket, llmContexts } = createHarness({ serverCapabilities: voiceCapabilities, finalTranscript: "spoken input" });
+    await socket.receive(JSON.stringify({ ...hello({
+      device: { deviceId: "device-1", platform: "ios" },
+      supportedCapabilities: voiceCapabilities, availableCapabilities: voiceCapabilities,
+    }), userId: "forged-client-user" }));
+    await socket.receive(JSON.stringify({ type: "listen", mode: "start", conversationId: "client-forged-conversation" }));
+    await socket.receive(binaryAudioCodec.encodeAudio({
+      kind: "audio", codec: "pcm_s16le", sampleRate: 24_000, channels: 1,
+      sequence: 0, payload: new Uint8Array([0, 0]),
+    }));
+    await socket.receive(JSON.stringify({ type: "listen", mode: "stop" }));
+    await vi.waitFor(() => expect(llmContexts).toHaveLength(1));
+    expect(createBrainTurnSeed(llmContexts[0], "spoken input")).toEqual({
+      userId: "user-1", authorizedDeviceId: "device-1", transportSessionId: "transport-1",
+      conversationId: "conversation-1", userMessage: "spoken input",
+    });
+  });
+  it("does not create a Brain turn from a v1 or unauthenticated context", () => {
+    expect(() => createBrainTurnSeed({
+      sessionId: "client-session", conversationId: "client-conversation", signal: new AbortController().signal,
+    }, "spoken input")).toThrow(/trusted admitted identity/i);
+  });
   it("accepts a trusted principal and authorized device without requiring screen, avatar or audio", async () => {
     const { socket, ownership } = createHarness();
     await socket.receive(JSON.stringify(hello()));

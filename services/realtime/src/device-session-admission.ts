@@ -35,6 +35,7 @@ export class DeviceSessionAdmission implements RealtimeSessionConnection {
   private readonly principalPromise: Promise<TrustedPrincipal | null>;
   private controlTail: Promise<void> = Promise.resolve();
   private inputFormat?: AudioFormat;
+  private outputFormat?: AudioFormat;
   private accepted = false;
   private owned = false;
   private closed = false;
@@ -59,7 +60,13 @@ export class DeviceSessionAdmission implements RealtimeSessionConnection {
   }
 
   async sendAudio(frame: AudioFrame): Promise<void> {
-    if (!this.closed) this.socket.send(binaryAudioCodec.encodeAudio(frame));
+    if (this.closed) return;
+    if (!this.outputFormat || !matchesFormat(frame, this.outputFormat)) {
+      this.socket.close(1002, "Unnegotiated output audio format");
+      this.handleClose();
+      throw new Error("TTS output audio format does not match the negotiated session format");
+    }
+    this.socket.send(binaryAudioCodec.encodeAudio(frame));
   }
 
   onControl(handler: (message: RealtimeControlMessage) => void | Promise<void>): () => void {
@@ -177,7 +184,11 @@ export class DeviceSessionAdmission implements RealtimeSessionConnection {
     if (negotiated.some((capability) => capability.id === "realtime.voice") &&
         input && "format" in input && output && "format" in output) {
       this.inputFormat = input.format;
-      new RealtimeSessionService(this, this.pipeline, { admittedSessionId: this.transportSessionId });
+      this.outputFormat = output.format;
+      new RealtimeSessionService(this, this.pipeline, {
+        admittedSessionId: this.transportSessionId,
+        trustedIdentity: { userId: principal.userId, authorizedDeviceId: authorizedDevice.deviceId },
+      });
     }
   }
 
@@ -198,8 +209,7 @@ export class DeviceSessionAdmission implements RealtimeSessionConnection {
       this.socket.close(1002, "Invalid audio frame");
       return;
     }
-    if (frame.codec !== this.inputFormat.codec || frame.sampleRate !== this.inputFormat.sampleRateHz ||
-        frame.channels !== this.inputFormat.channels) {
+    if (!matchesFormat(frame, this.inputFormat)) {
       this.socket.close(1002, "Unnegotiated audio format");
       return;
     }
@@ -231,4 +241,10 @@ export class DeviceSessionAdmission implements RealtimeSessionConnection {
     this.release();
     for (const handler of this.closeHandlers) void handler();
   }
+}
+
+function matchesFormat(frame: AudioFrame, format: AudioFormat): boolean {
+  return frame.codec === format.codec && frame.sampleRate === format.sampleRateHz &&
+    frame.channels === format.channels &&
+    (frame.codec !== "pcm_s16le" || frame.payload.byteLength % 2 === 0);
 }

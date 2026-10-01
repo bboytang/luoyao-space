@@ -3,6 +3,8 @@ import type { AudioFrame } from "./protocol";
 export interface AudioStreamContext {
   sessionId: string;
   conversationId: string;
+  /** Server-verified admission identity; never populated from client hello alone. */
+  trustedIdentity?: Readonly<{ userId: string; authorizedDeviceId: string }>;
   signal: AbortSignal;
   onMetrics?: (metrics: Readonly<PipelineMetrics>) => void;
 }

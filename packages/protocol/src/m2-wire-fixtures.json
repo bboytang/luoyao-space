@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "transport": "websocket",
+  "trustedServerContext": {
+    "principal": { "userId": "user-1" },
+    "authorizedDevice": { "userId": "user-1", "deviceId": "ios-device-1" }
+  },
+  "serverCapabilities": [
+    { "id": "realtime.voice" },
+    { "id": "audio.input", "formats": [{ "codec": "pcm_s16le", "sampleRateHz": 24000, "channels": 1 }] },
+    { "id": "audio.output", "formats": [{ "codec": "pcm_s16le", "sampleRateHz": 24000, "channels": 1 }] }
+  ],
+  "voice": {
+    "hello": {
+      "type": "device.hello",
+      "protocolVersions": [2],
+      "device": { "deviceId": "ios-device-1", "platform": "ios" },
+      "supportedCapabilities": [
+        { "id": "realtime.voice" },
+        { "id": "audio.input", "formats": [{ "codec": "pcm_s16le", "sampleRateHz": 24000, "channels": 1 }] },
+        { "id": "audio.output", "formats": [{ "codec": "pcm_s16le", "sampleRateHz": 24000, "channels": 1 }] },
+        { "id": "avatar.dynamic" }
+      ],
+      "availableCapabilities": [
+        { "id": "realtime.voice" },
+        { "id": "audio.input", "formats": [{ "codec": "pcm_s16le", "sampleRateHz": 24000, "channels": 1 }] },
+        { "id": "audio.output", "formats": [{ "codec": "pcm_s16le", "sampleRateHz": 24000, "channels": 1 }] }
+      ]
+    },
+    "accepted": {
+      "type": "device.accepted",
+      "version": 2,
+      "transportSessionId": "transport-1",
+      "ownerConnectionId": "connection-1",
+      "negotiatedCapabilities": [
+        { "id": "realtime.voice" },
+        { "id": "audio.input", "format": { "codec": "pcm_s16le", "sampleRateHz": 24000, "channels": 1 } },
+        { "id": "audio.output", "format": { "codec": "pcm_s16le", "sampleRateHz": 24000, "channels": 1 } }
+      ]
+    }
+  },
+  "headless": {
+    "authorizedDevice": { "userId": "user-1", "deviceId": "headless-1" },
+    "hello": {
+      "type": "device.hello",
+      "protocolVersions": [2],
+      "device": { "deviceId": "headless-1", "platform": "iot" },
+      "supportedCapabilities": [],
+      "availableCapabilities": []
+    },
+    "accepted": {
+      "type": "device.accepted",
+      "version": 2,
+      "transportSessionId": "transport-2",
+      "ownerConnectionId": "connection-2",
+      "negotiatedCapabilities": []
+    }
+  },
+  "unsupportedVersion": {
+    "hello": {
+      "type": "device.hello",
+      "protocolVersions": [3],
+      "device": { "deviceId": "ios-device-1", "platform": "ios" },
+      "supportedCapabilities": [],
+      "availableCapabilities": []
+    },
+    "rejected": { "type": "device.rejected", "reason": "unsupported_version", "supportedVersions": [2] }
+  },
+  "clientControls": [
+    { "type": "listen", "mode": "start" },
+    { "type": "abort", "reason": "barge_in" },
+    { "type": "listen", "mode": "stop" },
+    { "type": "abort", "reason": "user_cancel" }
+  ],
+  "serverControls": [
+    { "type": "stt", "text": "你好", "final": false },
+    { "type": "stt", "text": "你好", "final": true },
+    { "type": "tts", "state": "start", "messageId": "message-1" },
+    { "type": "tts", "state": "stop", "messageId": "message-1" },
+    { "type": "error", "code": "pipeline_error", "message": "provider unavailable", "retryable": true },
+    { "type": "barge_in", "state": "ready" }
+  ],
+  "binaryAudio": {
+    "valid": {
+      "hex": "4c5941310200005dc0010000002a000000040001feff",
+      "codec": "pcm_s16le",
+      "sampleRateHz": 24000,
+      "channels": 1,
+      "sequence": 42,
+      "payloadHex": "0001feff"
+    },
+    "malformed": [
+      { "name": "length-mismatch", "hex": "4c5941310200005dc0010000002a000000050001feff" },
+      { "name": "invalid-magic", "hex": "000000000200005dc0010000002a000000040001feff" }
+    ]
+  },
+  "reconnect": {
+    "after": "transport-close",
+    "accepted": {
+      "type": "device.accepted",
+      "version": 2,
+      "transportSessionId": "transport-3",
+      "ownerConnectionId": "connection-3",
+      "negotiatedCapabilities": []
+    }
+  }
+}

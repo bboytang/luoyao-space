@@ -14,6 +14,7 @@ export interface RealtimeSessionServiceOptions {
   now?: () => string;
   createMessageId?: () => string;
   admittedSessionId?: string;
+  trustedIdentity?: Readonly<{ userId: string; authorizedDeviceId: string }>;
 }
 
 class AudioFrameQueue implements AsyncIterable<AudioFrame> {
@@ -87,6 +88,7 @@ class AudioFrameQueue implements AsyncIterable<AudioFrame> {
 export class RealtimeSessionService {
   private readonly now: () => string;
   private readonly createMessageId: () => string;
+  private readonly trustedIdentity?: Readonly<{ userId: string; authorizedDeviceId: string }>;
   private readonly unsubscribeControl: () => void;
   private readonly unsubscribeAudio: () => void;
   private readonly unsubscribeClose: () => void;
@@ -107,6 +109,7 @@ export class RealtimeSessionService {
   ) {
     this.now = options.now ?? (() => new Date().toISOString());
     this.createMessageId = options.createMessageId ?? (() => crypto.randomUUID());
+    this.trustedIdentity = options.trustedIdentity;
     if (options.admittedSessionId) {
       this.sessionId = options.admittedSessionId;
       this.conversationId = options.admittedSessionId;
@@ -252,6 +255,7 @@ export class RealtimeSessionService {
       for await (const output of runAudioPipeline(this.pipeline, queue, {
         sessionId,
         conversationId,
+        trustedIdentity: this.trustedIdentity,
         signal: controller.signal,
       })) {
         if (output.type === "stt") {

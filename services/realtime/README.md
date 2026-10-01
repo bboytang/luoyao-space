@@ -36,15 +36,30 @@ Override with:
 
 The demo pipeline emits deterministic Chinese text and a short PCM16 frame. It is **not** a production ASR, LLM, or TTS implementation.
 
+M2-A supplies a narrow trusted Realtime-to-Brain turn seed in `src/brain-context.ts`:
+the v2 admission principal provides `userId`, authorization provides
+`authorizedDeviceId`, and the server supplies separate transport-session and
+conversation IDs. Client-declared IDs and capabilities cannot substitute for
+the principal. The adapter fails closed without admitted identity. It does
+not yet assemble Brain's relationship, memory, companion, signals, model, or
+real ASR/TTS dependencies; that full path belongs to M2-B. Existing provider
+factories already permit ASR/TTS implementations to be injected without
+changing the audio pipeline, but their default implementations remain demos.
+The service rejects inbound and outbound PCM16 frames whose metadata or
+sample alignment differs from the negotiated format.
+
 ## Target pipeline
 
 audio input
--> VAD
--> ASR / realtime model
--> streaming response
+-> ASR
+-> Luoyao Brain (personality, relationship, memory, safety, response generation)
 -> sentence segmentation
 -> TTS
 -> audio output
+
+Automatic VAD and real provider/Brain assembly are not part of M2-A; the first
+real voice slice may use explicit push-to-talk turn boundaries. A direct
+speech-to-speech path that bypasses Brain is not the approved architecture.
 
 Supports:
 
