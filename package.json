@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "db:migrate": "tsx database/migrations/cli.ts",
     "realtime:dev": "tsx services/realtime/src/server.ts"
   },
   "devDependencies": {

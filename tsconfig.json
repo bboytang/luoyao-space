@@ -9,6 +9,7 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
+    "database/**/*.ts",
     "packages/**/*.ts",
     "services/**/*.ts",
     "runtimes/**/*.ts",
