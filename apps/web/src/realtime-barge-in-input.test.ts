@@ -51,6 +51,43 @@ describe("RealtimeBargeInInput", () => {
     expect(onFrame).toHaveBeenCalledWith(frame);
   });
 
+  it("drops pending frames after capture is stopped", async () => {
+    let captureHandler!: (frame: AudioFrame) => void;
+    let releaseInterrupt!: () => void;
+    const source = {
+      start: vi.fn(async (handler: (frame: AudioFrame) => void) => {
+        captureHandler = handler;
+      }),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+    const detector: VoiceActivityDetector = {
+      analyze: vi.fn(() => ({ active: true, rms: 0.08 })),
+      reset: vi.fn(),
+    };
+    const target = {
+      isResponseActive: vi.fn(() => true),
+      interruptResponse: vi.fn(
+        () => new Promise<void>((resolve) => { releaseInterrupt = resolve; }),
+      ),
+    };
+    const input = new RealtimeBargeInInput(
+      source,
+      new RealtimeBargeInController(detector, target),
+    );
+    const onFrame = vi.fn();
+
+    await input.start(onFrame);
+    captureHandler(frame);
+    await Promise.resolve();
+    await input.stop();
+
+    releaseInterrupt();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onFrame).not.toHaveBeenCalled();
+  });
+
   it("resets the barge-in detector when capture stops", async () => {
     const source = {
       start: vi.fn().mockResolvedValue(undefined),
