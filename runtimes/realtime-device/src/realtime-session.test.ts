@@ -197,6 +197,21 @@ describe("RealtimeSession", () => {
     expect(input.stop).toHaveBeenCalledTimes(1);
   });
 
+  it("interrupts response playback without stopping the active input", async () => {
+    const { session, input, transport, output, avatar } = createSession();
+
+    await session.startListening();
+    await session.interruptResponse();
+
+    expect(input.stop).not.toHaveBeenCalled();
+    expect(output.stop).toHaveBeenCalledTimes(1);
+    expect(avatar.handleAborted).toHaveBeenCalledTimes(1);
+    expect(transport.send).toHaveBeenNthCalledWith(2, {
+      type: "abort",
+      reason: "barge_in",
+    });
+  });
+
   it("waits for an in-flight listening start before aborting", async () => {
     const { session, input, transport, output, avatar } = createSession();
     let releaseStart!: () => void;
