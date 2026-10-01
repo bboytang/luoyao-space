@@ -29,26 +29,28 @@ export class RealtimeBargeInController {
     private readonly options: RealtimeBargeInControllerOptions = {},
   ) {}
 
-  handleFrame(frame: AudioFrame): void {
+  handleFrame(frame: AudioFrame): Promise<void> {
     const sample = this.detector.analyze(frame);
-    if (!sample) return;
+    if (!sample) return this.interruptPromise ?? Promise.resolve();
 
     const risingEdge = sample.active && !this.previousActive;
     this.previousActive = sample.active;
 
-    if (!risingEdge || !this.target.isResponseActive() || this.interruptPromise) return;
+    if (risingEdge && this.target.isResponseActive() && !this.interruptPromise) {
+      const operation = this.target.interruptResponse();
+      const trackedOperation = operation
+        .catch((error) => {
+          this.options.onInterruptError?.(error);
+        })
+        .finally(() => {
+          if (this.interruptPromise === trackedOperation) {
+            this.interruptPromise = undefined;
+          }
+        });
+      this.interruptPromise = trackedOperation;
+    }
 
-    const operation = this.target.interruptResponse();
-    const trackedOperation = operation
-      .catch((error) => {
-        this.options.onInterruptError?.(error);
-      })
-      .finally(() => {
-        if (this.interruptPromise === trackedOperation) {
-          this.interruptPromise = undefined;
-        }
-      });
-    this.interruptPromise = trackedOperation;
+    return this.interruptPromise ?? Promise.resolve();
   }
 
   reset(): void {
