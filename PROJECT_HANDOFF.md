@@ -8,6 +8,104 @@
 
 ---
 
+## Development Execution Protocol
+
+This protocol coordinates ChatGPT architecture review and Codex implementation without relying on chat history as durable project memory. It governs execution; it does not replace the architecture decisions in `docs/architecture-direction.md`, `ARCHITECTURE.md`, or `docs/architecture-guardrails.md`.
+
+### 1. Source of truth
+
+Decision authority, in descending order:
+
+1. repository source-of-truth documents;
+2. the current explicitly approved task specification;
+3. current implementation facts;
+4. historical chat context.
+
+Verify what the code currently does before making implementation claims. If chat memory conflicts with current repository facts, use the repository and report the conflict. If implementation facts conflict with normative architecture documents, report the discrepancy rather than silently changing the architecture. Critical architecture constraints must live in the repository, not only in chat context.
+
+### 2. Permanent product/platform guardrail
+
+The accepted priority remains **iOS > Windows > Android > macOS > IoT / electronic devices > Web**. Web must not become the product architecture center. A single task must not change the established **Shared Core + Platform Adapter Layer + Native Hosts/Clients** direction.
+
+Apply the existing authoritative rules in `docs/architecture-direction.md`, `ARCHITECTURE.md`, and `docs/architecture-guardrails.md`; do not create a conflicting second set of architecture guardrails here.
+
+### 3. Role separation
+
+- **ChatGPT / architecture-review role:** milestone planning, architecture decisions, risk review, review of Codex results, and deciding whether work advances to the next milestone.
+- **Codex / implementation role:** inspect repository facts, implement the approved task, run targeted and local validation, use Git/GitHub/CI when authorized, and report evidence and unresolved risks.
+- **Repository:** durable project memory and source of truth.
+- **CI:** final machine-verifiable integration gate.
+
+### 4. Task execution rules
+
+For every implementation task:
+
+1. Read only source-of-truth documents relevant to the task; do not reread the entire repository without a concrete reason.
+2. Inspect current code before making implementation assumptions.
+3. Keep changes narrowly scoped to the approved task.
+4. Do not opportunistically refactor unrelated modules.
+5. Do not change product direction or architecture unless explicitly authorized by the task.
+6. Prefer targeted tests during implementation.
+7. Before a commit candidate, run the repository-required full local gates.
+8. Do not commit or push unless explicitly authorized.
+9. Stop after completing the requested scope; do not automatically begin the next milestone.
+10. If unexpected architecture, security, data-integrity, compatibility, or scope issues appear, stop expansion, report them, and request a decision instead of silently widening the task.
+
+### 5. Tool/plugin usage
+
+Available development tools may include GitHub, Superpowers, Context7, and Codex Security. Use a tool only when it materially improves the current task; do not invoke every tool mechanically. Repository code and documents remain authoritative for project-specific facts, and tool output must not silently override established architecture.
+
+- **GitHub:** repository, CI, pull-request, and issue facts.
+- **Superpowers:** planning, test-driven development, and systematic debugging when appropriate.
+- **Context7:** current external library, framework, and API documentation; not a substitute for reading repository code.
+- **Codex Security:** primarily security-sensitive boundaries and audits.
+
+### 6. Efficient validation strategy
+
+The normal implementation loop is:
+
+```text
+approved task -> inspect relevant code -> implement -> targeted validation
+  -> full local gates -> review -> one logical commit -> push -> CI final verification
+```
+
+Commit and push only when authorized. Do not push after every tiny edit merely to use CI as a local debugger. Diagnose and fix CI failures before continuing unrelated development.
+
+### 7. Standard Codex handoff format
+
+Default to a compact end-of-task report using applicable fields:
+
+```text
+Task:
+HEAD:
+Scope completed:
+Files changed:
+Targeted validation:
+Full local gates:
+Database/integration validation:
+Git status:
+Commit:
+Push:
+CI:
+Risks / unresolved issues:
+Decision needed:
+Recommended next action:
+```
+
+Omit fields that genuinely do not apply. Do not dump long command logs unless a command failed, exact output is needed for diagnosis, or the reviewer requests it. Report facts and evidence rather than lengthy narration.
+
+### 8. Escalation rule
+
+Return to ChatGPT/architecture review before continuing when architecture boundaries, a public/shared protocol, database migration/history semantics, security/auth/permission boundaries, or platform priority would change; when significant scope expansion is required; when local tests and CI disagree without an explained environmental cause; or when multiple materially different implementation choices exist.
+
+Routine implementation details within an approved design do not require repeated architecture review.
+
+### 9. Context-efficiency rule
+
+Avoid restating stable project history in every task. Prefer references to repository source-of-truth documents, current HEAD, current task ID/milestone, changed files, test evidence, and unresolved decisions. Minimize duplicated context without losing correctness or continuity.
+
+---
+
 ## 1. Product identity
 
 Luoyao is **Luoyao Space Personal AI OS**.
@@ -430,7 +528,9 @@ The regression test blocks the first control handler, sends a second control mes
 
 ---
 
-## 13. CURRENT BLOCKER — READ THIS FIRST
+## 13. Historical CI blocker — resolved
+
+This section records the CI state at the time of the original handoff. It is historical context, not the current development blocker; check current HEAD and its CI before acting.
 
 At the time this handoff was written, the latest CI for:
 
@@ -452,7 +552,7 @@ Observed result:
 
 The failed test run was reproduced; this is not currently safe to treat as a one-off flake.
 
-### Immediate next action
+### Action required at that time
 
 **Do not add new product features.**
 
@@ -493,7 +593,7 @@ If CI status cannot be retrieved, say so explicitly. Never interpret absence of 
 
 ---
 
-## 15. Current implementation phase
+## 15. Implementation phase at the original handoff
 
 The roadmap describes the project as being in the **durable Task OS** phase, with Memory OS productionization also completed/checked.
 
@@ -774,4 +874,4 @@ When uncertain, stop and inspect the repository architecture documents and curre
 
 ## 22. One-line handoff summary
 
-> **Build one Luoyao Core with native platform hosts, capability-driven devices, Web as reference/test/demo rather than product center, and move toward Rust incrementally only after boundaries and behavior are stable; right now, the first task is to diagnose and fix the red CI on commit `6685d8b` before adding new features.**
+> **Build one Luoyao Core with native platform hosts, capability-driven devices, Web as reference/test/demo rather than product center, and move toward Rust incrementally only after boundaries and behavior are stable; check current HEAD, CI, and the approved task before proceeding.**
