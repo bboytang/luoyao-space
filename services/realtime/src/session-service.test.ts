@@ -173,6 +173,59 @@ describe("RealtimeSessionService", () => {
     expect(stopped).toBe(true);
   });
 
+  it("keeps the input queue alive and restarts the pipeline for barge-in", async () => {
+    let runs = 0;
+    let firstRunStopped = false;
+    const bargeInPipeline: AudioPipeline = {
+      ...pipeline,
+      asr: {
+        async *transcribe(frames, context) {
+          runs += 1;
+          for await (const _frame of frames) {
+            if (runs === 1) {
+              while (!context.signal.aborted) await new Promise((resolve) => setTimeout(resolve, 1));
+              firstRunStopped = true;
+              return;
+            }
+            yield { type: "final", text: "interrupted turn" as const };
+            return;
+          }
+        },
+      },
+    };
+
+    const connection = new FakeConnection();
+    new RealtimeSessionService(connection, bargeInPipeline);
+
+    await connection.control({ type: "hello", version: 1, sessionId: "session-barge-in" });
+    await connection.control({ type: "listen", mode: "start" });
+    await connection.pushAudio(frame);
+
+    const bargeIn = connection.control({ type: "abort", reason: "barge_in" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await connection.pushAudio({ ...frame, sequence: 1 });
+    await bargeIn;
+
+    expect(firstRunStopped).toBe(true);
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await connection.control({ type: "listen", mode: "stop" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(runs).toBe(2);
+    expect(connection.messages).not.toContainEqual({
+      type: "error",
+      code: "already_listening",
+      message: "A listen session is already active",
+      retryable: false,
+    });
+    expect(connection.messages).toContainEqual({
+      type: "stt",
+      text: "interrupted turn",
+      final: true,
+    });
+  });
+
   it("waits for an aborted pipeline before accepting a new listen session", async () => {
     let runs = 0;
     let firstRunStopped = false;
