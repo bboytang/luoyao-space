@@ -18,6 +18,7 @@ export interface RealtimeSessionServiceOptions {
 class AudioFrameQueue implements AsyncIterable<AudioFrame> {
   private readonly frames: AudioFrame[] = [];
   private readonly waiters: Array<(result: IteratorResult<AudioFrame>) => void> = [];
+  private generation = 0;
   private ended = false;
 
   push(frame: AudioFrame): void {
@@ -33,11 +34,31 @@ class AudioFrameQueue implements AsyncIterable<AudioFrame> {
     while (this.waiters.length) this.waiters.shift()?.({ value: undefined, done: true });
   }
 
-  [Symbol.asyncIterator](): AsyncIterator<AudioFrame> {
-    return this;
+  handoff(): void {
+    if (this.ended) return;
+    this.generation += 1;
+    this.frames.length = 0;
+    while (this.waiters.length) this.waiters.shift()?.({ value: undefined, done: true });
   }
 
-  next(): Promise<IteratorResult<AudioFrame>> {
+  reader(): AsyncIterable<AudioFrame> {
+    const generation = this.generation;
+    return {
+      [Symbol.asyncIterator]: () => ({
+        next: () => this.next(generation),
+      }),
+    };
+  }
+
+  [Symbol.asyncIterator](): AsyncIterator<AudioFrame> {
+    return this.reader()[Symbol.asyncIterator]();
+  }
+
+  private next(generation: number): Promise<IteratorResult<AudioFrame>> {
+    if (generation !== this.generation) {
+      return Promise.resolve({ value: undefined, done: true });
+    }
+
     const frame = this.frames.shift();
     if (frame) return Promise.resolve({ value: frame, done: false });
     if (this.ended) return Promise.resolve({ value: undefined, done: true });
@@ -175,6 +196,7 @@ export class RealtimeSessionService {
     if (!queue || !controller || !pipelinePromise) return;
 
     this.bargeInQueueHandoff = queue;
+    queue.handoff();
     controller.abort();
     await pipelinePromise;
 
