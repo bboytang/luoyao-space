@@ -65,6 +65,40 @@ describe("WebSocketSessionConnection", () => {
     expect(audio).toEqual([frame]);
   });
 
+  it("serializes concurrent control messages in arrival order", async () => {
+    const socket = new FakeSocket();
+    const connection = new WebSocketSessionConnection(socket);
+    let releaseFirst!: () => void;
+    const seen: string[] = [];
+
+    connection.onControl(async (message) => {
+      seen.push(message.type);
+      if (message.type === "hello") {
+        await new Promise<void>((resolve) => { releaseFirst = resolve; });
+      }
+    });
+
+    const first = socket.receive(JSON.stringify({
+      type: "hello",
+      version: 1,
+      sessionId: "session-1",
+    }));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const second = socket.receive(JSON.stringify({
+      type: "ping",
+      timestamp: 1,
+    }));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(seen).toEqual(["hello"]);
+
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(seen).toEqual(["hello", "ping"]);
+  });
+
   it("encodes server control and audio messages", async () => {
     const socket = new FakeSocket();
     const connection = new WebSocketSessionConnection(socket);
