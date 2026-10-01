@@ -42,6 +42,10 @@ export class RealtimeSession {
   private closePromise?: Promise<void>;
   private abortPromise?: Promise<void>;
   private interruptPromise?: Promise<void>;
+  private bargeInReady?: {
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  };
   private connectPromise?: Promise<void>;
   private startListeningPromise?: Promise<void>;
   private stopListeningPromise?: Promise<void>;
@@ -61,6 +65,11 @@ export class RealtimeSession {
 
     this.removeMessage = this.transport.onMessage((message) => {
       this.avatar.handleServerMessage(message);
+      if (message.type === "barge_in" && message.state === "ready") {
+        this.bargeInReady?.resolve();
+      } else if (message.type === "error") {
+        this.bargeInReady?.reject(new Error(message.message));
+      }
       if (message.type === "tts" && message.state === "stop") {
         const epoch = this.avatar.getPlaybackEpoch();
         void this.output.waitForIdle?.()
@@ -78,6 +87,8 @@ export class RealtimeSession {
       if (this.closed) return;
       this.closed = true;
       this.listening = false;
+      this.bargeInReady?.reject(new Error("RealtimeSession is closed"));
+      this.bargeInReady = undefined;
       this.setState("closed");
       this.detachTransportHandlers();
       this.avatar.handleClosed();
@@ -196,7 +207,17 @@ export class RealtimeSession {
       this.avatar.handleAborted();
 
       if (this.closed) return;
-      await this.transport.send({ type: "abort", reason: "barge_in" });
+
+      const ready = new Promise<void>((resolve, reject) => {
+        this.bargeInReady = { resolve, reject };
+      });
+
+      try {
+        await this.transport.send({ type: "abort", reason: "barge_in" });
+        await ready;
+      } finally {
+        this.bargeInReady = undefined;
+      }
     })();
 
     try {
