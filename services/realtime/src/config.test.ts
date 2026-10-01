@@ -95,6 +95,94 @@ describe("loadRealtimeConfig", () => {
     });
   });
 
+  it("loads independently configured Alibaba Beijing providers without runtime fallback", () => {
+    const config = loadRealtimeConfig({
+      REALTIME_ASR_PROVIDER: "alibaba", REALTIME_LLM_PROVIDER: "brain", REALTIME_TTS_PROVIDER: "alibaba",
+      REALTIME_BRAIN_MODEL_PROVIDER: "alibaba", REALTIME_RELATIONSHIP_MODE: "initial",
+      ALIBABA_ASR_API_KEY: "asr-key", ALIBABA_ASR_WS_URL: "wss://asr-workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",
+      ALIBABA_ASR_MODEL: "paraformer-realtime-v2",
+      ALIBABA_BRAIN_API_KEY: "brain-key", ALIBABA_BRAIN_BASE_URL: "https://brain-workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      ALIBABA_BRAIN_MODEL: "qwen-flash",
+      ALIBABA_TTS_API_KEY: "tts-key", ALIBABA_TTS_WS_URL: "wss://tts-workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",
+      ALIBABA_TTS_MODEL: "cosyvoice-v3.5-flash", ALIBABA_TTS_VOICE_ID: "voice-example",
+      REALTIME_COMPANION_ID: "luoyao", DATABASE_URL: "postgresql://example.test/luoyao",
+    });
+    expect(config.realVoice).toEqual({
+      asr: { provider: "alibaba", options: { apiKey: "asr-key", model: "paraformer-realtime-v2",
+        url: "wss://asr-workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference" } },
+      model: { provider: "alibaba", options: { apiKey: "brain-key", model: "qwen-flash",
+        baseUrl: "https://brain-workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1" } },
+      tts: { provider: "alibaba", options: { apiKey: "tts-key", model: "cosyvoice-v3.5-flash",
+        voice: "voice-example", url: "wss://tts-workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference" } },
+      companionId: "luoyao", databaseUrl: "postgresql://example.test/luoyao",
+    });
+  });
+
+  it("uses ALIBABA_API_KEY only as an explicit per-stage configuration default", () => {
+    const config = loadRealtimeConfig({
+      REALTIME_ASR_PROVIDER: "alibaba", REALTIME_LLM_PROVIDER: "brain", REALTIME_TTS_PROVIDER: "alibaba",
+      REALTIME_BRAIN_MODEL_PROVIDER: "alibaba", REALTIME_RELATIONSHIP_MODE: "initial",
+      ALIBABA_API_KEY: "shared-explicit-key",
+      ALIBABA_ASR_WS_URL: "wss://workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",
+      ALIBABA_ASR_MODEL: "paraformer-realtime-v2",
+      ALIBABA_BRAIN_BASE_URL: "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      ALIBABA_BRAIN_MODEL: "qwen-flash",
+      ALIBABA_TTS_WS_URL: "wss://workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",
+      ALIBABA_TTS_MODEL: "cosyvoice-v3.5-flash", ALIBABA_TTS_VOICE_ID: "voice-example",
+      REALTIME_COMPANION_ID: "luoyao", DATABASE_URL: "postgresql://example.test/luoyao",
+    });
+    expect(config.realVoice?.asr.options?.apiKey).toBe("shared-explicit-key");
+    expect(config.realVoice?.model.options?.apiKey).toBe("shared-explicit-key");
+    expect(config.realVoice?.tts.options?.apiKey).toBe("shared-explicit-key");
+  });
+
+  it("fails closed for incomplete or unsupported Alibaba provider configuration without echoing secrets", () => {
+    const base = {
+      REALTIME_ASR_PROVIDER: "alibaba", REALTIME_LLM_PROVIDER: "brain", REALTIME_TTS_PROVIDER: "alibaba",
+      REALTIME_BRAIN_MODEL_PROVIDER: "alibaba", REALTIME_RELATIONSHIP_MODE: "initial",
+      ALIBABA_API_KEY: "private-secret-key",
+      ALIBABA_ASR_WS_URL: "wss://workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",
+      ALIBABA_ASR_MODEL: "paraformer-realtime-v2",
+      ALIBABA_BRAIN_BASE_URL: "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      ALIBABA_BRAIN_MODEL: "qwen-flash",
+      ALIBABA_TTS_WS_URL: "wss://workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",
+      ALIBABA_TTS_MODEL: "cosyvoice-v3.5-flash", ALIBABA_TTS_VOICE_ID: "voice-example",
+      REALTIME_COMPANION_ID: "luoyao", DATABASE_URL: "postgresql://example.test/luoyao",
+    };
+    expect(() => loadRealtimeConfig({ ...base, ALIBABA_TTS_VOICE_ID: "" })).toThrow(/voice/i);
+    expect(() => loadRealtimeConfig({ ...base, ALIBABA_ASR_MODEL: "other-asr" })).toThrow(/ASR model/i);
+    expect(() => loadRealtimeConfig({ ...base, ALIBABA_BRAIN_MODEL: "other-model" })).toThrow(/Brain model/i);
+    expect(() => loadRealtimeConfig({ ...base, ALIBABA_TTS_MODEL: "other-tts" })).toThrow(/TTS model/i);
+    expect(() => loadRealtimeConfig({ ...base, ALIBABA_ASR_WS_URL: "https://private-secret-key.example.test/path" }))
+      .toThrow(/ASR.*WebSocket/i);
+    for (const mutation of [
+      { ALIBABA_API_KEY: "", ALIBABA_ASR_API_KEY: "", ALIBABA_BRAIN_API_KEY: "", ALIBABA_TTS_API_KEY: "" },
+      { ALIBABA_TTS_VOICE_ID: "" },
+    ]) {
+      let message = "";
+      try { loadRealtimeConfig({ ...base, ...mutation }); } catch (error) { message = (error as Error).message; }
+      expect(message).toBeTruthy();
+      expect(message).not.toContain("private-secret-key");
+    }
+  });
+
+  it("keeps mixed real-provider selection explicit", () => {
+    const config = loadRealtimeConfig({
+      REALTIME_ASR_PROVIDER: "alibaba", REALTIME_LLM_PROVIDER: "brain", REALTIME_TTS_PROVIDER: "openai",
+      REALTIME_BRAIN_MODEL_PROVIDER: "alibaba", REALTIME_RELATIONSHIP_MODE: "initial",
+      ALIBABA_API_KEY: "alibaba-key",
+      ALIBABA_ASR_WS_URL: "wss://workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",
+      ALIBABA_ASR_MODEL: "paraformer-realtime-v2",
+      ALIBABA_BRAIN_BASE_URL: "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      ALIBABA_BRAIN_MODEL: "qwen-flash",
+      OPENAI_TTS_API_KEY: "openai-key", OPENAI_TTS_MODEL: "tts-model", OPENAI_TTS_VOICE: "voice",
+      REALTIME_COMPANION_ID: "luoyao", DATABASE_URL: "postgresql://example.test/luoyao",
+    });
+    expect(config.realVoice?.asr.provider).toBe("alibaba");
+    expect(config.realVoice?.model.provider).toBe("alibaba");
+    expect(config.realVoice?.tts.provider).toBe("openai");
+  });
+
   it("rejects unsupported real providers and a direct v2 external LLM", () => {
     const base = { REALTIME_ASR_PROVIDER: "openai", REALTIME_LLM_PROVIDER: "brain",
       REALTIME_TTS_PROVIDER: "openai", REALTIME_BRAIN_MODEL_PROVIDER: "openai",

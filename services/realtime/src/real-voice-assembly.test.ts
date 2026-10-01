@@ -3,6 +3,8 @@ import type { AsrProvider, TtsProvider } from "../../../runtimes/realtime-device
 import type { ModelProvider } from "../../brain/src/model-router";
 import { BrainLlmProvider } from "./brain-llm";
 import { createRealVoicePipeline } from "./real-voice-assembly";
+import { AlibabaParaformerAsrProvider } from "./providers/alibaba-asr";
+import { AlibabaCosyVoiceTtsProvider } from "./providers/alibaba-tts";
 import { OpenAiAsrProvider } from "./providers/openai-asr";
 import { OpenAiTtsProvider } from "./providers/openai-tts";
 
@@ -33,6 +35,33 @@ describe("createRealVoicePipeline", () => {
     expect(pipeline.asr).toBe(asr);
     expect(pipeline.llm).toBeInstanceOf(BrainLlmProvider);
     expect(pipeline.tts).toBe(tts);
+  });
+
+  it("assembles the approved Alibaba stack through Brain without changing realtime orchestration", () => {
+    const pipeline = createRealVoicePipeline({
+      asr: { provider: "alibaba", options: { apiKey: "asr-key", model: "paraformer-realtime-v2",
+        url: "wss://asr-workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference" } },
+      model: { provider: "alibaba", options: { apiKey: "brain-key", model: "qwen-flash",
+        baseUrl: "https://brain-workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1" } },
+      tts: { provider: "alibaba", options: { apiKey: "tts-key", model: "cosyvoice-v3.5-flash",
+        voice: "voice-example", url: "wss://tts-workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference" } },
+      companionId: "luoyao", databaseUrl: "postgresql://unused",
+    }, { async query() { return { rows: [] }; } });
+    expect(pipeline.asr).toBeInstanceOf(AlibabaParaformerAsrProvider);
+    expect(pipeline.llm).toBeInstanceOf(BrainLlmProvider);
+    expect(pipeline.tts).toBeInstanceOf(AlibabaCosyVoiceTtsProvider);
+  });
+
+  it("keeps a mixed Alibaba/OpenAI stack explicit at each provider boundary", () => {
+    const pipeline = createRealVoicePipeline({
+      asr: { provider: "alibaba", options: { apiKey: "asr-key", model: "paraformer-realtime-v2",
+        url: "wss://workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference" } },
+      model: openAiConfig.model, tts: openAiConfig.tts,
+      companionId: "luoyao", databaseUrl: "postgresql://unused",
+    }, { async query() { return { rows: [] }; } });
+    expect(pipeline.asr).toBeInstanceOf(AlibabaParaformerAsrProvider);
+    expect(pipeline.llm).toBeInstanceOf(BrainLlmProvider);
+    expect(pipeline.tts).toBeInstanceOf(OpenAiTtsProvider);
   });
 
   it("does not fall back to another model provider when the selected one is unavailable", () => {

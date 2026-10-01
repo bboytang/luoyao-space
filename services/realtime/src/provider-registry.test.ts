@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { AudioPipeline } from "../../../runtimes/realtime-device/src/audio-pipeline";
 import { runAudioPipeline } from "../../../runtimes/realtime-device/src/pipeline-runner";
 import { createDemoRealtimePipeline } from "./demo-pipeline";
+import { AlibabaParaformerAsrProvider } from "./providers/alibaba-asr";
+import { AlibabaCosyVoiceTtsProvider } from "./providers/alibaba-tts";
 import {
   createDefaultRealtimeProviderFactories,
   createRealtimePipeline,
@@ -44,6 +46,18 @@ describe("createRealtimePipeline", () => {
     });
 
     expect(provider).toBeDefined();
+  });
+
+  it("registers Alibaba ASR and TTS only with explicit provider options", () => {
+    const factories = createDefaultRealtimeProviderFactories();
+    expect(() => factories.asr.alibaba?.({ model: "paraformer-realtime-v2" })).toThrow(/apiKey/i);
+    expect(() => factories.tts.alibaba?.({ apiKey: "key", model: "cosyvoice-v3.5-flash" })).toThrow(/voice/i);
+    expect(factories.asr.alibaba?.({ apiKey: "key", model: "paraformer-realtime-v2",
+      url: "wss://workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference" }))
+      .toBeInstanceOf(AlibabaParaformerAsrProvider);
+    expect(factories.tts.alibaba?.({ apiKey: "key", model: "cosyvoice-v3.5-flash", voice: "voice-example",
+      url: "wss://workspace.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference" }))
+      .toBeInstanceOf(AlibabaCosyVoiceTtsProvider);
   });
 
   it("requires credentials when creating OpenAI", () => {

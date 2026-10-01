@@ -65,6 +65,33 @@ function requireOpenAiOption(value: string | undefined, name: string): string {
   return value;
 }
 
+function requireAlibabaOption(value: string | undefined, name: string): string {
+  if (!value) throw new Error(`${name} is required for the selected Alibaba provider`);
+  return value;
+}
+
+function requireAlibabaModel(value: string | undefined, expected: string, kind: string): string {
+  if (value !== expected) throw new Error(`Alibaba ${kind} model must be ${expected}`);
+  return value;
+}
+
+function requireAlibabaUrl(value: string | undefined, kind: "ASR WebSocket" | "Brain base" | "TTS WebSocket"): string {
+  if (!value) throw new Error(`Alibaba ${kind} URL is required`);
+  try {
+    const url = new URL(value);
+    const websocket = kind !== "Brain base";
+    const expectedPath = websocket ? "/api-ws/v1/inference" : "/compatible-mode/v1";
+    if (url.protocol !== (websocket ? "wss:" : "https:") || url.username || url.password ||
+      url.search || url.hash || url.pathname.replace(/\/$/, "") !== expectedPath ||
+      !url.hostname.endsWith(".cn-beijing.maas.aliyuncs.com")) {
+      throw new Error("invalid");
+    }
+  } catch {
+    throw new Error(`Alibaba ${kind} URL must be a secure Beijing workspace endpoint`);
+  }
+  return value.replace(/\/$/, "");
+}
+
 export function loadRealtimeConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): RealtimeConfig {
@@ -73,6 +100,7 @@ export function loadRealtimeConfig(
   const tts = readProvider("REALTIME_TTS_PROVIDER", env.REALTIME_TTS_PROVIDER);
   const apiKey = readOptionalString(env.OPENAI_API_KEY);
   const model = readOptionalString(env.OPENAI_MODEL);
+  const alibabaApiKey = readOptionalString(env.ALIBABA_API_KEY);
   const host = env.REALTIME_HOST?.trim() || "127.0.0.1";
   const developmentEnabled = readOptIn("REALTIME_DEV_MODE", env.REALTIME_DEV_MODE);
   const legacyV1 = readOptIn("REALTIME_DEV_V1_COMPAT", env.REALTIME_DEV_V1_COMPAT);
@@ -141,31 +169,73 @@ export function loadRealtimeConfig(
     if (!companionId || !databaseUrl) {
       throw new Error("Real voice requires REALTIME_COMPANION_ID and DATABASE_URL");
     }
-    if (asr !== "openai") throw new Error(`Unsupported ASR provider: ${asr}`);
-    if (modelProvider !== "openai") {
+    if (asr !== "openai" && asr !== "alibaba") throw new Error("Unsupported ASR provider");
+    if (modelProvider !== "openai" && modelProvider !== "alibaba") {
       throw new Error("Unsupported REALTIME_BRAIN_MODEL_PROVIDER");
     }
-    if (tts !== "openai") throw new Error(`Unsupported TTS provider: ${tts}`);
-    realVoice = {
-      asr: { provider: asr, options: {
+    if (tts !== "openai" && tts !== "alibaba") throw new Error("Unsupported TTS provider");
+    let asrSelection: ProviderSelection;
+    if (asr === "openai") {
+      asrSelection = { provider: asr, options: {
         apiKey: requireOpenAiOption(readOptionalString(env.OPENAI_ASR_API_KEY) ?? apiKey,
           "OPENAI_ASR_API_KEY or OPENAI_API_KEY"),
         model: requireOpenAiOption(readOptionalString(env.OPENAI_ASR_MODEL), "OPENAI_ASR_MODEL"),
         url: readOptionalString(env.OPENAI_ASR_URL),
-      } },
-      model: { provider: modelProvider, options: {
+      } };
+    } else if (asr === "alibaba") {
+      asrSelection = { provider: asr, options: {
+        apiKey: requireAlibabaOption(readOptionalString(env.ALIBABA_ASR_API_KEY) ?? alibabaApiKey,
+          "ALIBABA_ASR_API_KEY or ALIBABA_API_KEY"),
+        model: requireAlibabaModel(readOptionalString(env.ALIBABA_ASR_MODEL), "paraformer-realtime-v2", "ASR"),
+        url: requireAlibabaUrl(readOptionalString(env.ALIBABA_ASR_WS_URL), "ASR WebSocket"),
+      } };
+    } else {
+      throw new Error("Unsupported ASR provider");
+    }
+
+    let modelSelection: ProviderSelection;
+    if (modelProvider === "openai") {
+      modelSelection = { provider: modelProvider, options: {
         apiKey: requireOpenAiOption(readOptionalString(env.OPENAI_BRAIN_API_KEY) ?? apiKey,
           "OPENAI_BRAIN_API_KEY or OPENAI_API_KEY"),
         model: requireOpenAiOption(model, "OPENAI_MODEL"),
         baseUrl: readOptionalString(env.OPENAI_BRAIN_BASE_URL) ?? readOptionalString(env.OPENAI_BASE_URL),
-      } },
-      tts: { provider: tts, options: {
+      } };
+    } else if (modelProvider === "alibaba") {
+      modelSelection = { provider: modelProvider, options: {
+        apiKey: requireAlibabaOption(readOptionalString(env.ALIBABA_BRAIN_API_KEY) ?? alibabaApiKey,
+          "ALIBABA_BRAIN_API_KEY or ALIBABA_API_KEY"),
+        model: requireAlibabaModel(readOptionalString(env.ALIBABA_BRAIN_MODEL), "qwen-flash", "Brain"),
+        baseUrl: requireAlibabaUrl(readOptionalString(env.ALIBABA_BRAIN_BASE_URL), "Brain base"),
+      } };
+    } else {
+      throw new Error("Unsupported REALTIME_BRAIN_MODEL_PROVIDER");
+    }
+
+    let ttsSelection: ProviderSelection;
+    if (tts === "openai") {
+      ttsSelection = { provider: tts, options: {
         apiKey: requireOpenAiOption(readOptionalString(env.OPENAI_TTS_API_KEY) ?? apiKey,
           "OPENAI_TTS_API_KEY or OPENAI_API_KEY"),
         model: requireOpenAiOption(readOptionalString(env.OPENAI_TTS_MODEL), "OPENAI_TTS_MODEL"),
         voice: requireOpenAiOption(readOptionalString(env.OPENAI_TTS_VOICE), "OPENAI_TTS_VOICE"),
         baseUrl: readOptionalString(env.OPENAI_TTS_BASE_URL) ?? readOptionalString(env.OPENAI_BASE_URL),
-      } },
+      } };
+    } else if (tts === "alibaba") {
+      ttsSelection = { provider: tts, options: {
+        apiKey: requireAlibabaOption(readOptionalString(env.ALIBABA_TTS_API_KEY) ?? alibabaApiKey,
+          "ALIBABA_TTS_API_KEY or ALIBABA_API_KEY"),
+        model: requireAlibabaModel(readOptionalString(env.ALIBABA_TTS_MODEL), "cosyvoice-v3.5-flash", "TTS"),
+        voice: requireAlibabaOption(readOptionalString(env.ALIBABA_TTS_VOICE_ID), "ALIBABA_TTS_VOICE_ID"),
+        url: requireAlibabaUrl(readOptionalString(env.ALIBABA_TTS_WS_URL), "TTS WebSocket"),
+      } };
+    } else {
+      throw new Error("Unsupported TTS provider");
+    }
+    realVoice = {
+      asr: asrSelection,
+      model: modelSelection,
+      tts: ttsSelection,
       companionId, databaseUrl,
     };
   }

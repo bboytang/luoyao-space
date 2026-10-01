@@ -7,6 +7,8 @@ import type {
 } from "../../../runtimes/realtime-device/src/audio-pipeline";
 import WebSocket from "ws";
 import { createDemoRealtimePipeline } from "./demo-pipeline";
+import { AlibabaParaformerAsrProvider, type AlibabaAsrSocket } from "./providers/alibaba-asr";
+import { AlibabaCosyVoiceTtsProvider, type AlibabaTtsSocket } from "./providers/alibaba-tts";
 import { OpenAiAsrProvider, type OpenAiAsrSocket } from "./providers/openai-asr";
 import { OpenAiLlmProvider } from "./providers/openai-llm";
 import { OpenAiTtsProvider } from "./providers/openai-tts";
@@ -49,6 +51,14 @@ export function createDefaultRealtimeProviderFactories(brain?: LlmProvider): Rea
     vad: { demo: () => demo.vad },
     asr: {
       demo: () => demo.asr,
+      alibaba: (options) => new AlibabaParaformerAsrProvider({
+        apiKey: requireStringOption(options, "apiKey"),
+        model: requireStringOption(options, "model"),
+        url: requireStringOption(options, "url"),
+        socketFactory: {
+          create: (url, socketOptions) => new WebSocket(url, { headers: socketOptions.headers }) as unknown as AlibabaAsrSocket,
+        },
+      }),
       openai: (options) => new OpenAiAsrProvider({
         apiKey: requireStringOption(options, "apiKey"),
         model: requireStringOption(options, "model"),
@@ -73,6 +83,15 @@ export function createDefaultRealtimeProviderFactories(brain?: LlmProvider): Rea
     },
     tts: {
       demo: () => demo.tts,
+      alibaba: (options) => new AlibabaCosyVoiceTtsProvider({
+        apiKey: requireStringOption(options, "apiKey"),
+        model: requireStringOption(options, "model"),
+        voice: requireStringOption(options, "voice"),
+        url: requireStringOption(options, "url"),
+        socketFactory: {
+          create: (url, socketOptions) => new WebSocket(url, { headers: socketOptions.headers }) as unknown as AlibabaTtsSocket,
+        },
+      }),
       openai: (options) => new OpenAiTtsProvider({
         apiKey: requireStringOption(options, "apiKey"),
         model: requireStringOption(options, "model"),

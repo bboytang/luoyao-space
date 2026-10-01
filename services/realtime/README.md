@@ -64,9 +64,9 @@ The default demo providers never make external API calls. Real voice always
 selects `REALTIME_LLM_PROVIDER=brain`; ASR, the Brain model, and TTS are
 independent explicit selections. Each selected provider is validated at
 startup, and an unavailable provider fails closed rather than falling back to
-another external data destination. No new external provider is registered by
-M2-D1: OpenAI remains the only implemented external adapter for each stage.
-To select the existing OpenAI-backed server-side path, set:
+another external data destination. M2-D1 introduced the independent selection
+boundary; M2-D2 additionally registers Alibaba Beijing adapters documented
+below. To select the existing OpenAI-backed server-side path, set:
 
 `REALTIME_ASR_PROVIDER=openai`, `REALTIME_LLM_PROVIDER=brain`,
 `REALTIME_TTS_PROVIDER=openai`, `REALTIME_BRAIN_MODEL_PROVIDER=openai`,
@@ -111,6 +111,52 @@ identity (`REALTIME_DEV_MODE=1`, `REALTIME_DEV_USER_ID`, `REALTIME_DEV_DEVICE_ID
 It uses the selected TTS adapter to synthesize a repository-safe test phrase at runtime, then checks real ASR,
 Brain/model, TTS and non-silent output. It is not part of `pnpm test` or CI,
 does not save recordings, and does not test production authentication.
+
+### Alibaba Cloud Model Studio (China/Beijing)
+
+M2-D2 registers independently selectable Alibaba adapters for
+`paraformer-realtime-v2` ASR, `qwen-flash` through the Brain model boundary,
+and `cosyvoice-v3.5-flash` TTS. Paraformer and CosyVoice use the native
+Alibaba inference WebSocket task protocol; Qwen uses Alibaba's documented
+OpenAI-compatible Chat Completions endpoint. Realtime still calls Brain rather
+than Qwen directly, and `MemoryIsolatedVoiceModel` remains the outbound
+allowlist for model content.
+
+Select Alibaba per stage with `REALTIME_ASR_PROVIDER=alibaba`,
+`REALTIME_BRAIN_MODEL_PROVIDER=alibaba`, and/or
+`REALTIME_TTS_PROVIDER=alibaba`; `REALTIME_LLM_PROVIDER=brain` remains required.
+Configure only the selected stages:
+
+- ASR: `ALIBABA_ASR_API_KEY`, `ALIBABA_ASR_WS_URL`, `ALIBABA_ASR_MODEL`
+- Brain model: `ALIBABA_BRAIN_API_KEY`, `ALIBABA_BRAIN_BASE_URL`, `ALIBABA_BRAIN_MODEL`
+- TTS: `ALIBABA_TTS_API_KEY`, `ALIBABA_TTS_WS_URL`, `ALIBABA_TTS_MODEL`, `ALIBABA_TTS_VOICE_ID`
+
+`ALIBABA_API_KEY` may be configured explicitly as the default credential value
+inherited by a selected Alibaba stage. It is not a runtime fallback. Provider
+failure never switches provider, region, model, endpoint, or credential.
+Stage-specific keys override this configured default.
+
+The ASR and TTS URLs must be full secure Beijing workspace inference URLs of
+the form `wss://<workspace>.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference`.
+The Brain base URL must have the form
+`https://<workspace>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`.
+Only the approved M2-D2 models are accepted: `paraformer-realtime-v2`,
+`qwen-flash`, and `cosyvoice-v3.5-flash`. CosyVoice 3.5 Flash has no system
+voice default, so `ALIBABA_TTS_VOICE_ID` is mandatory and must name an
+operator-created design or clone voice. No voice or model is substituted.
+
+Both speech adapters preserve the Luoyao-facing 24 kHz mono little-endian
+PCM16 contract. Authentication remains in request headers, and no trusted
+identity, device/session metadata, relationship state, or long-term memory is
+added to provider requests. Alibaba Chat Completions documentation does not
+provide the OpenAI Responses `store:false` field, so this integration does not
+claim an equivalent provider-side retention guarantee.
+
+The existing `pnpm realtime:smoke:live` command operates on the explicitly
+selected providers and therefore can exercise this stack, but it remains a
+paid, opt-in operator action and is never run by tests or CI. M2-D2 does not
+execute that smoke test; physical-iPhone speech acceptance remains a later
+deployment gate.
 
 ## Target pipeline
 

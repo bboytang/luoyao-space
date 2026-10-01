@@ -1,5 +1,6 @@
 import type { AsrProvider, AudioPipeline, TtsProvider } from "../../../runtimes/realtime-device/src/audio-pipeline";
 import { DefaultModelRouter, type ModelProvider } from "../../brain/src/model-router";
+import { AlibabaBrainModelProvider } from "../../brain/src/alibaba-model-provider";
 import { OpenAiBrainModelProvider } from "../../brain/src/openai-model-provider";
 import { MemoryIsolatedVoiceModel } from "../../brain/src/voice-model-boundary";
 import { createMemoryService } from "../../memory/src/service";
@@ -27,6 +28,10 @@ export function createRealVoicePipeline(
   providers: RealVoiceProviderBoundaries = {},
 ): AudioPipeline {
   const modelFactories: Record<string, (options?: ProviderOptions) => ModelProvider> = {
+    alibaba: (options) => new AlibabaBrainModelProvider({
+      apiKey: requiredOption(options, "apiKey"), model: requiredOption(options, "model"),
+      baseUrl: requiredOption(options, "baseUrl"),
+    }),
     openai: (options) => new OpenAiBrainModelProvider({
       apiKey: requiredOption(options, "apiKey"), model: requiredOption(options, "model"),
       baseUrl: typeof options?.baseUrl === "string" ? options.baseUrl : undefined,
