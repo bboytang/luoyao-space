@@ -142,7 +142,9 @@ export class RealtimeSession {
 
     this.startListeningPromise = (async () => {
       this.inputStopCompleted = false;
-      await this.input.start((frame: AudioFrame) => void this.transport.sendAudio(frame));
+      await this.input.start((frame: AudioFrame) => {
+        void this.sendInputAudio(frame);
+      });
       if (this.closed) {
         await this.stopInput();
         return;
@@ -300,6 +302,12 @@ export class RealtimeSession {
     })();
 
     await this.closePromise;
+  }
+
+  private async sendInputAudio(frame: AudioFrame): Promise<void> {
+    await this.interruptPromise?.catch(() => {});
+    if (this.closed) return;
+    await this.transport.sendAudio(frame);
   }
 
   private async stopInput(): Promise<void> {
