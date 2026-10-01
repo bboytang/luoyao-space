@@ -1,6 +1,7 @@
 import type { RealtimeAudioInput, RealtimeAudioOutput } from "../../../runtimes/realtime-device/src/audio-io";
+import type { AcceptedDeviceSessionV2, DeviceCapabilityOffer } from "../../../packages/protocol/src/device-session";
 import { binaryAudioCodec } from "../../../runtimes/realtime-device/src/binary-audio-codec";
-import { RealtimeSession } from "../../../runtimes/realtime-device/src/realtime-session";
+import { DeviceSessionClient, type DeviceSessionClientState } from "../../../runtimes/realtime-device/src/device-session-client";
 import { WebSocketTransport, type WebSocketLike } from "../../../runtimes/realtime-device/src/websocket-transport";
 import { RealtimeAvatarController } from "../../../runtimes/realtime-device/src/realtime-avatar-controller";
 import { AvatarRuntime } from "../../../runtimes/avatar/src/runtime";
@@ -9,16 +10,20 @@ export interface RealtimeClientSocket extends WebSocketLike {
   waitForOpen(): Promise<void>;
 }
 
-export type RealtimeClientState = "connecting" | "connected" | "closed";
+export type RealtimeClientState = DeviceSessionClientState;
+
+const pcmFormat = { codec: "pcm_s16le", sampleRateHz: 24_000, channels: 1 } as const;
 
 export interface RealtimeClientOptions {
   url: string;
   socket?: RealtimeClientSocket;
-  avatar: AvatarRuntime;
-  input: RealtimeAudioInput;
-  output: RealtimeAudioOutput;
-  sessionId?: string;
-  deviceId?: string;
+  avatar?: AvatarRuntime;
+  input?: RealtimeAudioInput;
+  output?: RealtimeAudioOutput;
+  /** A stable declared identity. Authorization is verified by the server, never by this value. */
+  deviceId: string;
+  /** Results of Web adapter availability checks, not browser API presence. */
+  availableAudio: { input: boolean; output: boolean };
   onStateChange?: (state: RealtimeClientState) => void;
 }
 
@@ -79,37 +84,60 @@ export class BrowserWebSocket implements WebSocketLike {
   }
 }
 
-function createSessionId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
 export class RealtimeClient {
-  private readonly session: RealtimeSession;
-  readonly sessionId: string;
-  readonly deviceId?: string;
+  private readonly session: DeviceSessionClient;
+  private accepted?: AcceptedDeviceSessionV2;
 
   constructor(options: RealtimeClientOptions) {
     const socket = options.socket ?? new BrowserWebSocket(options.url);
     const transport = new WebSocketTransport(socket, binaryAudioCodec);
-    const avatarController = new RealtimeAvatarController(options.avatar);
-
-    this.sessionId = options.sessionId ?? createSessionId();
-    this.deviceId = options.deviceId;
-
-    this.session = new RealtimeSession({
+    const supportedCapabilities: DeviceCapabilityOffer[] = [];
+    const availableCapabilities: DeviceCapabilityOffer[] = [];
+    if (options.avatar) {
+      supportedCapabilities.push({ id: "display" }, { id: "avatar.dynamic" });
+      availableCapabilities.push({ id: "display" }, { id: "avatar.dynamic" });
+    }
+    if (options.input) {
+      supportedCapabilities.push({ id: "audio.input", formats: [pcmFormat] });
+      if (options.availableAudio.input) availableCapabilities.push({ id: "audio.input", formats: [pcmFormat] });
+    }
+    if (options.output) {
+      supportedCapabilities.push({ id: "audio.output", formats: [pcmFormat] });
+      if (options.availableAudio.output) availableCapabilities.push({ id: "audio.output", formats: [pcmFormat] });
+    }
+    if (options.input && options.output) {
+      supportedCapabilities.push({ id: "realtime.voice" });
+      if (options.availableAudio.input && options.availableAudio.output) {
+        availableCapabilities.push({ id: "realtime.voice" });
+      }
+    }
+    this.session = new DeviceSessionClient({
       transport,
       input: options.input,
       output: options.output,
-      avatar: avatarController,
-      sessionId: this.sessionId,
-      deviceId: this.deviceId,
+      avatar: options.avatar ? new RealtimeAvatarController(options.avatar) : undefined,
+      hello: {
+        type: "device.hello", protocolVersions: [2],
+        device: { deviceId: options.deviceId, platform: "web" },
+        supportedCapabilities, availableCapabilities,
+      },
       onStateChange: options.onStateChange,
     });
   }
 
-  async connect(): Promise<void> {
-    await this.session.connect();
+  async connect(): Promise<AcceptedDeviceSessionV2> {
+    const accepted = await this.session.connect();
+    this.accepted = accepted;
+    return accepted;
+  }
+
+  isOperational(): boolean { return this.session.getState() === "accepted"; }
+  canUseAvatar(): boolean {
+    return this.isOperational() && !!this.accepted?.negotiatedCapabilities.some((item) => item.id === "avatar.dynamic");
+  }
+  canUseVoice(): boolean {
+    const ids = new Set<string>(this.accepted?.negotiatedCapabilities.map((item) => item.id));
+    return this.isOperational() && ["realtime.voice", "audio.input", "audio.output"].every((id) => ids.has(id));
   }
 
   async startListening(): Promise<void> {

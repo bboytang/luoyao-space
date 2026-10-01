@@ -144,6 +144,19 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
 
   constructor(private readonly sampleRate = 24_000) {}
 
+  /** Hold a running output context across admission so availability reflects this adapter. */
+  async prepare(): Promise<boolean> {
+    try {
+      this.context ??= new AudioContext({ sampleRate: this.sampleRate });
+      await this.context.resume();
+      if (this.context.state === "running") return true;
+    } catch {
+      // A missing or blocked output device is simply unavailable at admission.
+    }
+    await this.stop().catch(() => {});
+    return false;
+  }
+
   play(frame: AudioFrame): Promise<void> {
     const generation = this.playbackGeneration;
     const operation = this.playTail.then(async () => {
@@ -216,6 +229,8 @@ export class BrowserPcmPlayback implements RealtimeAudioOutput {
   getPlaybackTime(): number {
     return this.context?.currentTime ?? 0;
   }
+
+  isPlaying(): boolean { return this.pendingSources > 0; }
 
   getMouthOpenAt(timeSeconds: number): number {
     this.lipSyncTimeline.pruneBefore(timeSeconds);

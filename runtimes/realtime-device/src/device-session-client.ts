@@ -37,6 +37,7 @@ export class DeviceSessionClient {
   private removeClose: () => void;
   private voice?: RealtimeSession;
   private admissionInProgress = false;
+  private terminationCleanup?: Promise<void>;
 
   constructor(private readonly options: DeviceSessionClientOptions) {
     this.removeAdmission = options.transport.onDeviceSession(async (outcome) => {
@@ -99,10 +100,13 @@ export class DeviceSessionClient {
     });
     this.removeClose = options.transport.onClose(() => {
       if (this.state === "rejected" || this.state === "terminated") return;
+      this.terminationCleanup = Promise.resolve()
+        .then(() => this.voice?.close())
+        .then(() => undefined)
+        .catch(() => {});
       this.setState("terminated");
       this.pending?.reject(new Error("Device session transport closed"));
       this.pending = undefined;
-      void this.voice?.close().catch(() => {});
     });
   }
 
@@ -157,14 +161,19 @@ export class DeviceSessionClient {
   }
 
   async close(): Promise<void> {
-    if (this.state === "terminated") return;
+    if (this.state === "terminated") {
+      await this.terminationCleanup;
+      return;
+    }
     this.setState("terminated");
     this.pending?.reject(new Error("Device session closed"));
     this.pending = undefined;
     this.removeAdmission();
     this.removeClose();
-    if (this.voice) await this.voice.close();
-    else await this.options.transport.close(1000, "device session closed");
+    this.terminationCleanup = this.voice
+      ? this.voice.close()
+      : this.options.transport.close(1000, "device session closed");
+    await this.terminationCleanup;
   }
 
   private validAcceptance(outcome: AcceptedDeviceSessionV2): boolean {

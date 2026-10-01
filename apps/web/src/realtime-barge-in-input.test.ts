@@ -45,10 +45,7 @@ describe("RealtimeBargeInInput", () => {
     expect(onFrame).not.toHaveBeenCalled();
 
     releaseInterrupt();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(onFrame).toHaveBeenCalledWith(frame);
+    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledWith(frame));
   });
 
   it("drops pending frames after capture is stopped", async () => {

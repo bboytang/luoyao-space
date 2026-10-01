@@ -45,6 +45,7 @@ export class RealtimeSession {
   private listening = false;
   private closed = false;
   private closePromise?: Promise<void>;
+  private remoteCleanup?: Promise<void>;
   private abortPromise?: Promise<void>;
   private interruptPromise?: Promise<void>;
   private bargeInReady?: {
@@ -101,8 +102,7 @@ export class RealtimeSession {
       this.setState("closed");
       this.detachTransportHandlers();
       this.avatar.handleClosed();
-      void this.stopInput().catch(() => {});
-      void this.output.stop().catch(() => {});
+      this.remoteCleanup = Promise.allSettled([this.stopInput(), this.output.stop()]).then(() => {});
     });
   }
 
@@ -272,6 +272,10 @@ export class RealtimeSession {
   async close(): Promise<void> {
     if (this.closePromise) {
       await this.closePromise;
+      return;
+    }
+    if (this.remoteCleanup) {
+      await this.remoteCleanup;
       return;
     }
 

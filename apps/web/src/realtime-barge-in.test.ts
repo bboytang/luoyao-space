@@ -43,16 +43,14 @@ describe("RealtimeBargeInController", () => {
       { active: false, rms: 0.01 },
       { active: true, rms: 0.08 },
       { active: true, rms: 0.09 },
-      { active: false, rms: 0.01 },
-      { active: true, rms: 0.08 },
     );
 
     controller.handleFrame(frame);
     controller.handleFrame(frame);
+    await controller.handleFrame(frame);
+    detector.queue({ active: false, rms: 0.01 }, { active: true, rms: 0.08 });
     controller.handleFrame(frame);
-    controller.handleFrame(frame);
-    controller.handleFrame(frame);
-    await Promise.resolve();
+    await controller.handleFrame(frame);
 
     expect(target.interruptResponse).toHaveBeenCalledTimes(2);
   });
@@ -88,19 +86,21 @@ describe("RealtimeBargeInController", () => {
       { active: false, rms: 0.01 },
       { active: true, rms: 0.08 },
     );
-    controller.handleFrame(frame);
+    const firstInterrupt = controller.handleFrame(frame);
     controller.handleFrame(frame);
     controller.handleFrame(frame);
 
     expect(target.interruptResponse).toHaveBeenCalledTimes(1);
 
     release();
-    await Promise.resolve();
+    await firstInterrupt;
 
     detector.queue({ active: false, rms: 0.01 }, { active: true, rms: 0.08 });
     controller.handleFrame(frame);
-    controller.handleFrame(frame);
-    await Promise.resolve();
+    const secondInterrupt = controller.handleFrame(frame);
+    expect(target.interruptResponse).toHaveBeenCalledTimes(2);
+    release();
+    await secondInterrupt;
 
     expect(target.interruptResponse).toHaveBeenCalledTimes(2);
   });

@@ -34,6 +34,31 @@ const voiceAccepted = {
 };
 
 describe("DeviceSessionClient v2 admission", () => {
+  it("lets the host await voice cleanup after a remote transport close", async () => {
+    const transport = new MemoryRealtimeTransport();
+    let releaseOutput!: () => void;
+    const outputStop = new Promise<void>((resolve) => { releaseOutput = resolve; });
+    const input = { start: vi.fn().mockResolvedValue(undefined), stop: vi.fn().mockResolvedValue(undefined) };
+    const output = {
+      play: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn(() => outputStop),
+    };
+    const client = new DeviceSessionClient({ transport, hello: voiceHello, input, output });
+    const connecting = client.connect();
+    await Promise.resolve();
+    await transport.receiveDeviceSession(voiceAccepted);
+    await connecting;
+
+    await transport.close();
+    let cleaned = false;
+    const cleanup = client.close().then(() => { cleaned = true; });
+    await Promise.resolve();
+    expect(cleaned).toBe(false);
+    releaseOutput();
+    await cleanup;
+    expect(cleaned).toBe(true);
+  });
+
   it("does not become operational when the transport opens or hello is sent", async () => {
     const transport = new MemoryRealtimeTransport();
     const client = new DeviceSessionClient({ transport, hello: headlessHello });

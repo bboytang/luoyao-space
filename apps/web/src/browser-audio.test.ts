@@ -2,6 +2,24 @@ import { describe, expect, it, vi } from "vitest";
 import { BrowserPcmCapture, BrowserPcmPlayback } from "./browser-audio";
 
 describe("browser audio adapters", () => {
+  it("holds a verified output context through admission and releases it on stop", async () => {
+    const resume = vi.fn().mockResolvedValue(undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("AudioContext", class {
+      state = "running";
+      resume = resume;
+      close = close;
+    });
+    try {
+      const playback = new BrowserPcmPlayback();
+      expect(await playback.prepare()).toBe(true);
+      expect(await playback.prepare()).toBe(true);
+      expect(resume).toHaveBeenCalledTimes(2);
+      await playback.stop();
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it("exposes separate capture and playback adapters", () => {
     expect(new BrowserPcmCapture()).toBeInstanceOf(BrowserPcmCapture);
     expect(new BrowserPcmPlayback()).toBeInstanceOf(BrowserPcmPlayback);
@@ -174,8 +192,10 @@ describe("browser audio adapters", () => {
     };
 
     await playback.play(frame);
+    expect(playback.isPlaying()).toBe(true);
     const staleSource = sources[0];
     await playback.stop();
+    expect(playback.isPlaying()).toBe(false);
 
     await playback.play({ ...frame, sequence: 1 });
     const currentSource = sources[1];
@@ -188,10 +208,12 @@ describe("browser audio adapters", () => {
     staleSource.onended?.();
     await Promise.resolve();
     expect(idleResolved).toBe(false);
+    expect(playback.isPlaying()).toBe(true);
 
     currentSource.onended?.();
     await idle;
     expect(idleResolved).toBe(true);
+    expect(playback.isPlaying()).toBe(false);
   });
 
   it("can start again after a completed capture stop", async () => {
