@@ -65,3 +65,13 @@ jobs:
         run: xcodebuild -project apps/ios/LuoyaoIOS.xcodeproj -scheme LuoyaoIOS -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
       - name: Run shared-wire XCTest on iOS simulator
         run: xcodebuild -project apps/ios/LuoyaoIOS.xcodeproj -scheme LuoyaoIOS -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5' CODE_SIGNING_ALLOWED=NO test
+      - name: Archive unsigned iPhoneOS app
+        run: xcodebuild -project apps/ios/LuoyaoIOS.xcodeproj -scheme LuoyaoIOS -configuration Release -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/LuoyaoIOS-unsigned.xcarchive" CODE_SIGNING_ALLOWED=NO SKIP_INSTALL=NO archive
+      - name: Verify and package re-signable device IPA
+        run: bash apps/ios/package-unsigned-ipa.sh "$RUNNER_TEMP/LuoyaoIOS-unsigned.xcarchive" "$RUNNER_TEMP/luoyao-ios-device-artifact"
+      - name: Publish unsigned iPhoneOS IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuoyaoIOS-unsigned-re-signable-iphoneos
+          path: ${{ runner.temp }}/luoyao-ios-device-artifact/LuoyaoIOS-unsigned-re-signable.ipa
+          if-no-files-found: error

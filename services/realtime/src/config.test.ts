@@ -10,6 +10,7 @@ describe("loadRealtimeConfig", () => {
       openai: undefined,
       realVoice: undefined,
       development: { enabled: false, legacyV1: false, identity: undefined },
+      physicalDevelopment: undefined,
     });
   });
 
@@ -31,6 +32,7 @@ describe("loadRealtimeConfig", () => {
       openai: undefined,
       realVoice: undefined,
       development: { enabled: false, legacyV1: false, identity: undefined },
+      physicalDevelopment: undefined,
     });
   });
 
@@ -54,6 +56,7 @@ describe("loadRealtimeConfig", () => {
       },
       realVoice: undefined,
       development: { enabled: true, legacyV1: true, identity: undefined },
+      physicalDevelopment: undefined,
     });
   });
 
@@ -108,5 +111,35 @@ describe("loadRealtimeConfig", () => {
     }).development).toEqual({
       enabled: true, legacyV1: false, identity: { userId: "user-1", deviceId: "device-1" },
     });
+  });
+
+  it("keeps physical-device authentication off unless fully and explicitly configured", () => {
+    const token = "a".repeat(64);
+    const fields = { REALTIME_PHYSICAL_DEV_TOKEN: token,
+      REALTIME_PHYSICAL_DEV_USER_ID: "trusted-user", REALTIME_PHYSICAL_DEV_DEVICE_ID: "authorized-phone" };
+    expect(loadRealtimeConfig({}).physicalDevelopment).toBeUndefined();
+    expect(() => loadRealtimeConfig(fields)).toThrow(/physical-device development mode/i);
+    expect(() => loadRealtimeConfig({ REALTIME_PHYSICAL_DEV_MODE: "1" })).toThrow(/requires.*token.*user.*device/i);
+    expect(loadRealtimeConfig({ REALTIME_PHYSICAL_DEV_MODE: "1", ...fields }).physicalDevelopment).toEqual({
+      token, userId: "trusted-user", deviceId: "authorized-phone",
+    });
+  });
+
+  it("rejects physical-device auth alongside the old bypass, production, or a non-loopback listener", () => {
+    const fields = { REALTIME_PHYSICAL_DEV_MODE: "1", REALTIME_PHYSICAL_DEV_TOKEN: "a".repeat(64),
+      REALTIME_PHYSICAL_DEV_USER_ID: "trusted-user", REALTIME_PHYSICAL_DEV_DEVICE_ID: "authorized-phone" };
+    expect(() => loadRealtimeConfig({ ...fields, REALTIME_DEV_MODE: "1" })).toThrow(/mutually exclusive/i);
+    expect(() => loadRealtimeConfig({ ...fields, NODE_ENV: "production" })).toThrow(/production/i);
+    expect(() => loadRealtimeConfig({ ...fields, REALTIME_HOST: "0.0.0.0" })).toThrow(/loopback/i);
+    expect(() => loadRealtimeConfig({ ...fields, REALTIME_PHYSICAL_DEV_TOKEN: "short" })).toThrow(/64.*hex/i);
+  });
+
+  it("never includes configured development secrets in validation errors", () => {
+    const secret = "b".repeat(64);
+    let message = "";
+    try { loadRealtimeConfig({ REALTIME_PHYSICAL_DEV_TOKEN: secret }); }
+    catch (error) { message = (error as Error).message; }
+    expect(message).toBeTruthy();
+    expect(message).not.toContain(secret);
   });
 });

@@ -15,8 +15,11 @@ microphone and playback adapters can run. A
 device ID is not authentication. The server's trusted principal and device
 authorization checks remain mandatory and fail closed. Enter a `wss://` URL
 without embedded credentials in the app. No endpoint or credential is bundled.
-The current Realtime development identity works only on a loopback-bound
-server; exposing it as a public-phone admission method is not approved.
+The old Realtime development identity works only on a loopback-bound server
+and is not phone admission. M2-C3 adds a distinct, explicit handshake-token
+development path behind a trusted TLS reverse proxy. The iOS host accepts the
+WSS endpoint and token at runtime; the token is not bundled or persisted and
+never enters `device.hello`. Realtime still enforces M1-B device authorization.
 
 The explicit push-to-talk path converts microphone input with AVAudioConverter,
 encodes PCM16 little-endian in LYA1 binary frames, and sends `listen:start` /
@@ -44,6 +47,8 @@ simulator on iOS 18.5, unsigned simulator build. The tests load the *same*
 
 Simulator compile/XCTest does not prove physical-device connectivity,
 microphone capture/playback quality, live provider speech, WSS reachability,
-or Apple signing. The repository still has no public WSS endpoint, production
-device credentials, or signed iPhone build. None are silently substituted by
-the development identity.
+or Apple signing. CI publishes a verified **unsigned**, device-targeted IPA
+for external signing; it is not directly installable. The repository still has
+no public WSS endpoint, production credentials, or signed iPhone build. Follow
+the [first-phone operator procedure](../../docs/deployment/physical-iphone.md)
+for TLS, token rotation, signing, and diagnostics.

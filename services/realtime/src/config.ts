@@ -28,6 +28,11 @@ export interface RealtimeConfig {
     readonly legacyV1: boolean;
     readonly identity?: { readonly userId: string; readonly deviceId: string };
   };
+  readonly physicalDevelopment?: {
+    readonly token: string;
+    readonly userId: string;
+    readonly deviceId: string;
+  };
 }
 
 function readOptIn(name: string, value: string | undefined): boolean {
@@ -70,6 +75,30 @@ export function loadRealtimeConfig(
   const legacyV1 = readOptIn("REALTIME_DEV_V1_COMPAT", env.REALTIME_DEV_V1_COMPAT);
   const devUserId = readOptionalString(env.REALTIME_DEV_USER_ID);
   const devDeviceId = readOptionalString(env.REALTIME_DEV_DEVICE_ID);
+  const physicalEnabled = readOptIn("REALTIME_PHYSICAL_DEV_MODE", env.REALTIME_PHYSICAL_DEV_MODE);
+  const physicalToken = readOptionalString(env.REALTIME_PHYSICAL_DEV_TOKEN);
+  const physicalUserId = readOptionalString(env.REALTIME_PHYSICAL_DEV_USER_ID);
+  const physicalDeviceId = readOptionalString(env.REALTIME_PHYSICAL_DEV_DEVICE_ID);
+
+  if (physicalEnabled && (developmentEnabled || legacyV1)) {
+    throw new Error("Physical-device authentication and loopback development bypass are mutually exclusive");
+  }
+  if (!physicalEnabled && [env.REALTIME_PHYSICAL_DEV_TOKEN, env.REALTIME_PHYSICAL_DEV_USER_ID,
+    env.REALTIME_PHYSICAL_DEV_DEVICE_ID].some((value) => value !== undefined)) {
+    throw new Error("Physical-device development mode must be explicitly enabled for its credentials");
+  }
+  if (physicalEnabled) {
+    if (env.NODE_ENV === "production") throw new Error("Physical-device development mode is forbidden in production");
+    if (host !== "127.0.0.1" && host !== "::1") {
+      throw new Error("Physical-device development mode requires a loopback host");
+    }
+    if (!physicalToken || !physicalUserId || !physicalDeviceId) {
+      throw new Error("Physical-device development mode requires token, user ID and device ID");
+    }
+    if (!/^[0-9a-f]{64}$/.test(physicalToken)) {
+      throw new Error("Physical-device development token must be 64 lowercase hex characters");
+    }
+  }
 
   if (legacyV1 && !developmentEnabled) throw new Error("v1 compatibility requires explicit development mode");
   if (!developmentEnabled && (env.REALTIME_DEV_USER_ID !== undefined || env.REALTIME_DEV_DEVICE_ID !== undefined)) {
@@ -137,5 +166,8 @@ export function loadRealtimeConfig(
       legacyV1,
       identity: devUserId && devDeviceId ? { userId: devUserId, deviceId: devDeviceId } : undefined,
     },
+    physicalDevelopment: physicalEnabled && physicalToken && physicalUserId && physicalDeviceId
+      ? { token: physicalToken, userId: physicalUserId, deviceId: physicalDeviceId }
+      : undefined,
   };
 }

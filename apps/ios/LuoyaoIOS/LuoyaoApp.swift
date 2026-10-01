@@ -9,6 +9,7 @@ import SwiftUI
 private struct DeviceSessionView: View {
     @StateObject private var client = NativeDeviceSessionClient()
     @State private var endpoint = ""
+    @State private var developmentToken = ""
 
     var body: some View {
         Form {
@@ -23,7 +24,13 @@ private struct DeviceSessionView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
-                Button("Connect") { client.connect(endpoint: endpoint) }
+                SecureField("Development credential (64 hex characters)", text: $developmentToken)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("Connect") {
+                    client.connect(endpoint: endpoint, developmentToken: developmentToken)
+                    developmentToken = "" // The credential is not persisted by this host.
+                }
                 Button("Disconnect") { client.disconnect() }
                 Text("Device ID: \(client.deviceId)")
                     .font(.footnote)

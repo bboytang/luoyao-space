@@ -3,6 +3,33 @@ import XCTest
 @testable import LuoyaoIOS
 
 final class DeviceSessionContractTests: XCTestCase {
+    func testPhysicalDevelopmentRequestKeepsCredentialInHandshakeHeaderOnly() throws {
+        let token = String(repeating: "a", count: 64)
+        let settings = try DevelopmentConnectionSettings(endpoint: "wss://voice.example.test/realtime", token: token)
+        let request = settings.request()
+        XCTAssertEqual(request.url?.absoluteString, "wss://voice.example.test/realtime")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer \(token)")
+        XCTAssertFalse(request.url!.absoluteString.contains(token))
+    }
+
+    func testPhysicalDevelopmentRequestRejectsInsecureOrEmbeddedCredentials() {
+        let token = String(repeating: "a", count: 64)
+        for endpoint in ["ws://voice.example.test/realtime", "wss://user:pass@voice.example.test/realtime",
+                         "wss://voice.example.test/realtime?token=secret", "wss://voice.example.test/realtime#fragment"] {
+            XCTAssertThrowsError(try DevelopmentConnectionSettings(endpoint: endpoint, token: token))
+        }
+        XCTAssertThrowsError(try DevelopmentConnectionSettings(endpoint: "wss://voice.example.test/realtime", token: "short"))
+    }
+
+    func testConnectionDiagnosticsSeparateTLSAndNetworkFailuresWithoutEchoingSecrets() {
+        XCTAssertEqual(DevelopmentConnectionDiagnostics.describe(URLError(.serverCertificateUntrusted)),
+                       "TLS certificate or hostname validation failed")
+        XCTAssertEqual(DevelopmentConnectionDiagnostics.describe(URLError(.cannotConnectToHost)),
+                       "Network connection failed; check WSS reachability")
+        XCTAssertEqual(DevelopmentConnectionDiagnostics.describe(URLError(.badServerResponse)),
+                       "WSS handshake rejected; check development credential and proxy")
+    }
+
     private func fixture() throws -> [String: Any] {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "m2-wire-fixtures", withExtension: "json"))
         return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])

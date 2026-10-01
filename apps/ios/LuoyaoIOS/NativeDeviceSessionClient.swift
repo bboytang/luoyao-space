@@ -19,6 +19,7 @@ struct DeviceIDStore {
 private final class SocketLifecycleDelegate: NSObject, URLSessionWebSocketDelegate {
     var opened: (() -> Void)?
     var closed: (() -> Void)?
+    var failed: ((Error) -> Void)?
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
                     didOpenWithProtocol negotiatedProtocol: String?) {
@@ -28,6 +29,17 @@ private final class SocketLifecycleDelegate: NSObject, URLSessionWebSocketDelega
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
                     didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
         closed?()
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error { failed?(error) }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse, newRequest: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        // Never forward the development credential to a redirected endpoint.
+        completionHandler(nil)
     }
 }
 
@@ -77,15 +89,10 @@ private final class SocketLifecycleDelegate: NSObject, URLSessionWebSocketDelega
         }
     }
 
-    func connect(endpoint: String) {
+    func connect(endpoint: String, developmentToken: String) {
         disconnect()
-        guard let url = URL(string: endpoint), url.scheme?.lowercased() == "wss",
-              let host = url.host, !host.isEmpty, url.user == nil, url.password == nil else {
-            diagnostic = "Enter a secure wss:// endpoint without embedded credentials"
-            return
-        }
-
         do {
+            let settings = try DevelopmentConnectionSettings(endpoint: endpoint, token: developmentToken)
             var hardwareActive = true
             do { try audioSession.activate() }
             catch { hardwareActive = false }
@@ -105,7 +112,7 @@ private final class SocketLifecycleDelegate: NSObject, URLSessionWebSocketDelega
             delegate = lifecycle
             let session = URLSession(configuration: .default, delegate: lifecycle, delegateQueue: nil)
             urlSession = session
-            let task = session.webSocketTask(with: url)
+            let task = session.webSocketTask(with: settings.request())
             socket = task
             lifecycle.opened = { [weak self, weak task] in
                 Task { @MainActor in
@@ -116,9 +123,16 @@ private final class SocketLifecycleDelegate: NSObject, URLSessionWebSocketDelega
             lifecycle.closed = { [weak self] in
                 Task { @MainActor in self?.handleClose(generation: generation) }
             }
+            lifecycle.failed = { [weak self] error in
+                Task { @MainActor in self?.fail(error, generation: generation) }
+            }
             task.resume()
+        } catch DevelopmentConnectionSettingsError.invalidEndpoint {
+            diagnostic = "Enter a wss:// endpoint without URL credentials, query or fragment"
+        } catch DevelopmentConnectionSettingsError.invalidCredential {
+            diagnostic = "Enter the 64-character development credential"
         } catch {
-            diagnostic = "Cannot construct v2 hello: \(error.localizedDescription)"
+            diagnostic = "Cannot construct v2 connection"
         }
     }
 
@@ -199,6 +213,7 @@ private final class SocketLifecycleDelegate: NSObject, URLSessionWebSocketDelega
                 case .data(let bytes):
                     guard state == .accepted else { throw DeviceSessionContractError.invalidResponse }
                     try voice.receiveAudio(bytes)
+                    voiceStatus = "Playback active"
                 @unknown default:
                     throw DeviceSessionContractError.invalidResponse
                 }
@@ -228,11 +243,13 @@ private final class SocketLifecycleDelegate: NSObject, URLSessionWebSocketDelega
 
     private func fail(_ error: Error, generation: UUID) {
         guard connectionID == generation else { return }
+        if state == .rejected || (error as? URLError)?.code == .cancelled { return }
+        connectionID = UUID() // A later close callback must not erase the diagnostic.
         voice.terminate()
         audioSession.deactivate()
         canListen = false
         canPlay = false
-        diagnostic = "Connection error: \(error.localizedDescription)"
+        diagnostic = DevelopmentConnectionDiagnostics.describe(error)
         machine?.transportClosed()
         state = .disconnected
         sessionID = nil

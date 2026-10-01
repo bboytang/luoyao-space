@@ -5,6 +5,7 @@ import { attachRealtimeConnection } from "./connection-factory";
 import { createRealVoicePipeline } from "./real-voice-assembly";
 import { createRealtimePipeline, createDefaultRealtimeProviderFactories } from "./provider-registry";
 import { loadRealtimeConfig } from "./config";
+import { createPhysicalDevelopmentProviders } from "./physical-development";
 
 const config = loadRealtimeConfig();
 const port = config.port;
@@ -21,11 +22,14 @@ const pipeline = real && pool
       tts: { provider: config.providers.tts },
     }, createDefaultRealtimeProviderFactories());
 const ownership = new InMemoryDeviceSessionOwnership();
+const physicalDevelopmentProviders = config.physicalDevelopment
+  ? createPhysicalDevelopmentProviders(config.physicalDevelopment)
+  : undefined;
 
 const server = new WebSocketServer({ host, port });
 
 server.on("connection", (socket: WebSocket, request) => {
-  attachRealtimeConnection(socket, request, pipeline, config, ownership);
+  attachRealtimeConnection(socket, request, pipeline, config, ownership, physicalDevelopmentProviders);
 });
 
 server.on("listening", () => {
