@@ -30,6 +30,10 @@ class FakeTransport implements RealtimeTransport {
     for (const handler of this.audios) void handler(frame);
   }
 
+  receiveMessage(message: Parameters<RealtimeTransport["onMessage"]>[0] extends (message: infer M) => unknown ? M : never): void {
+    for (const handler of this.messages) handler(message);
+  }
+
   receiveClose(): void {
     for (const handler of this.closes) handler({ code: 1000, reason: "", wasClean: true });
   }
@@ -197,11 +201,13 @@ describe("RealtimeSession", () => {
     expect(input.stop).toHaveBeenCalledTimes(1);
   });
 
-  it("interrupts response playback without stopping the active input", async () => {
+  it("waits for the server to finish barge-in handoff without stopping active input", async () => {
     const { session, input, transport, output, avatar } = createSession();
 
     await session.startListening();
-    await session.interruptResponse();
+    const interrupt = session.interruptResponse();
+
+    await Promise.resolve();
 
     expect(input.stop).not.toHaveBeenCalled();
     expect(output.stop).toHaveBeenCalledTimes(1);
@@ -210,6 +216,17 @@ describe("RealtimeSession", () => {
       type: "abort",
       reason: "barge_in",
     });
+
+    let settled = false;
+    void interrupt.finally(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    transport.receiveMessage({ type: "barge_in", state: "ready" });
+    await interrupt;
+    expect(settled).toBe(true);
   });
 
   it("waits for an in-flight listening start before aborting", async () => {
