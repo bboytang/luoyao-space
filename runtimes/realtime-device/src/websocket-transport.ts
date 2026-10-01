@@ -4,10 +4,11 @@ import type {
   RealtimeServerMessage,
 } from "./protocol";
 import type {
-  RealtimeTransport,
+  DeviceSessionTransport,
   TransportCloseEvent,
   TransportCodec,
 } from "./transport";
+import type { DeviceSessionHelloV2, DeviceSessionOutcomeV2 } from "../../../packages/protocol/src/device-session";
 
 export interface WebSocketLike {
   waitForOpen(): Promise<void>;
@@ -23,7 +24,7 @@ export interface WebSocketLike {
   ): void;
 }
 
-export class WebSocketTransport implements RealtimeTransport {
+export class WebSocketTransport implements DeviceSessionTransport {
   private readonly messageHandlers = new Set<
     (message: RealtimeServerMessage) => void | Promise<void>
   >();
@@ -33,6 +34,7 @@ export class WebSocketTransport implements RealtimeTransport {
   private readonly closeHandlers = new Set<
     (event: TransportCloseEvent) => void
   >();
+  private readonly deviceSessionHandlers = new Set<(outcome: DeviceSessionOutcomeV2) => void | Promise<void>>();
 
   constructor(
     private readonly socket: WebSocketLike,
@@ -42,10 +44,18 @@ export class WebSocketTransport implements RealtimeTransport {
       try {
         if (typeof event.data === "string") {
           const message = this.codec.decodeControl(event.data);
-          for (const handler of this.messageHandlers) {
-            void Promise.resolve()
-              .then(() => handler(message))
-              .catch(() => this.protocolClose(1011, "message handler failed"));
+          if (message.type === "device.accepted" || message.type === "device.rejected") {
+            for (const handler of this.deviceSessionHandlers) {
+              void Promise.resolve()
+                .then(() => handler(message))
+                .catch(() => this.protocolClose(1011, "admission handler failed"));
+            }
+          } else {
+            for (const handler of this.messageHandlers) {
+              void Promise.resolve()
+                .then(() => handler(message))
+                .catch(() => this.protocolClose(1011, "message handler failed"));
+            }
           }
           return;
         }
@@ -87,6 +97,15 @@ export class WebSocketTransport implements RealtimeTransport {
 
   async send(message: RealtimeControlMessage): Promise<void> {
     this.socket.send(this.codec.encodeControl(message));
+  }
+
+  async sendDeviceHello(hello: DeviceSessionHelloV2): Promise<void> {
+    this.socket.send(this.codec.encodeControl(hello));
+  }
+
+  onDeviceSession(handler: (outcome: DeviceSessionOutcomeV2) => void | Promise<void>): () => void {
+    this.deviceSessionHandlers.add(handler);
+    return () => this.deviceSessionHandlers.delete(handler);
   }
 
   async sendAudio(frame: AudioFrame): Promise<void> {

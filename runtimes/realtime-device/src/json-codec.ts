@@ -4,11 +4,12 @@ import type {
   AudioFrame,
 } from "./protocol";
 import { TransportProtocolError, type TransportCodec } from "./transport";
+import type { DeviceSessionHelloV2, DeviceSessionOutcomeV2 } from "../../../packages/protocol/src/device-session";
 
-const SERVER_TYPES = new Set(["ready", "stt", "tts", "error", "pong"]);
+const SERVER_TYPES = new Set(["ready", "stt", "tts", "barge_in", "error", "pong", "device.accepted", "device.rejected"]);
 
 export const jsonCodec: TransportCodec = {
-  decodeControl(data: string): RealtimeServerMessage {
+  decodeControl(data: string): RealtimeServerMessage | DeviceSessionOutcomeV2 {
     let value: unknown;
     try {
       value = JSON.parse(data);
@@ -22,10 +23,19 @@ export const jsonCodec: TransportCodec = {
     if (typeof message.type !== "string" || !SERVER_TYPES.has(message.type)) {
       throw new TransportProtocolError("Unsupported server message type");
     }
-    return message as unknown as RealtimeServerMessage;
+    if (message.type === "device.accepted" &&
+        (message.version !== 2 || typeof message.transportSessionId !== "string" ||
+         typeof message.ownerConnectionId !== "string" || !Array.isArray(message.negotiatedCapabilities))) {
+      throw new TransportProtocolError("Invalid accepted device session");
+    }
+    if (message.type === "device.rejected" &&
+        (typeof message.reason !== "string" || !Array.isArray(message.supportedVersions))) {
+      throw new TransportProtocolError("Invalid rejected device session");
+    }
+    return message as unknown as RealtimeServerMessage | DeviceSessionOutcomeV2;
   },
 
-  encodeControl(message: RealtimeControlMessage): string {
+  encodeControl(message: RealtimeControlMessage | DeviceSessionHelloV2): string {
     return JSON.stringify(message);
   },
 

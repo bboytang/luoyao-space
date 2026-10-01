@@ -3,6 +3,7 @@ import type {
   RealtimeControlMessage,
   RealtimeServerMessage,
 } from "./protocol";
+import type { DeviceSessionHelloV2, DeviceSessionOutcomeV2 } from "../../../packages/protocol/src/device-session";
 
 export interface RealtimeTransport {
   waitUntilReady(): Promise<void>;
@@ -14,6 +15,11 @@ export interface RealtimeTransport {
   onClose(handler: (event: TransportCloseEvent) => void): () => void;
 }
 
+export interface DeviceSessionTransport extends RealtimeTransport {
+  sendDeviceHello(hello: DeviceSessionHelloV2): Promise<void>;
+  onDeviceSession(handler: (outcome: DeviceSessionOutcomeV2) => void | Promise<void>): () => void;
+}
+
 export interface TransportCloseEvent {
   code: number;
   reason: string;
@@ -21,8 +27,8 @@ export interface TransportCloseEvent {
 }
 
 export interface TransportCodec {
-  decodeControl(data: string): RealtimeServerMessage;
-  encodeControl(message: RealtimeControlMessage): string;
+  decodeControl(data: string): RealtimeServerMessage | DeviceSessionOutcomeV2;
+  encodeControl(message: RealtimeControlMessage | DeviceSessionHelloV2): string;
   decodeAudio(data: Uint8Array): AudioFrame;
   encodeAudio(frame: AudioFrame): Uint8Array;
 }

@@ -4,9 +4,10 @@ import type {
   RealtimeServerMessage,
 } from "./protocol";
 import type {
-  RealtimeTransport,
+  DeviceSessionTransport,
   TransportCloseEvent,
 } from "./transport";
+import type { DeviceSessionHelloV2, DeviceSessionOutcomeV2 } from "../../../packages/protocol/src/device-session";
 
 type MessageHandler = (
   message: RealtimeServerMessage,
@@ -16,17 +17,19 @@ type AudioHandler = (frame: AudioFrame) => void | Promise<void>;
 
 type CloseHandler = (event: TransportCloseEvent) => void;
 
-export class MemoryRealtimeTransport implements RealtimeTransport {
+export class MemoryRealtimeTransport implements DeviceSessionTransport {
   async waitUntilReady(): Promise<void> {
     this.assertOpen();
   }
 
   readonly sentMessages: RealtimeControlMessage[] = [];
   readonly sentAudio: AudioFrame[] = [];
+  readonly sentDeviceHellos: DeviceSessionHelloV2[] = [];
 
   private readonly messageHandlers = new Set<MessageHandler>();
   private readonly audioHandlers = new Set<AudioHandler>();
   private readonly closeHandlers = new Set<CloseHandler>();
+  private readonly deviceSessionHandlers = new Set<(outcome: DeviceSessionOutcomeV2) => void | Promise<void>>();
   private closed = false;
 
   async send(message: RealtimeControlMessage): Promise<void> {
@@ -37,6 +40,21 @@ export class MemoryRealtimeTransport implements RealtimeTransport {
   async sendAudio(frame: AudioFrame): Promise<void> {
     this.assertOpen();
     this.sentAudio.push(frame);
+  }
+
+  async sendDeviceHello(hello: DeviceSessionHelloV2): Promise<void> {
+    this.assertOpen();
+    this.sentDeviceHellos.push(hello);
+  }
+
+  onDeviceSession(handler: (outcome: DeviceSessionOutcomeV2) => void | Promise<void>): () => void {
+    this.deviceSessionHandlers.add(handler);
+    return () => this.deviceSessionHandlers.delete(handler);
+  }
+
+  async receiveDeviceSession(outcome: DeviceSessionOutcomeV2): Promise<void> {
+    this.assertOpen();
+    for (const handler of this.deviceSessionHandlers) await handler(outcome);
   }
 
   async close(code = 1000, reason = ""): Promise<void> {

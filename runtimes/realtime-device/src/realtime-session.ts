@@ -23,8 +23,11 @@ export interface RealtimeSessionOptions {
   deviceId?: string;
   capabilities?: RealtimeCapability[];
   onStateChange?: (state: RealtimeClientSessionState) => void;
+  admitted?: boolean;
+  acceptOutputFrame?: (frame: AudioFrame) => boolean;
 }
 
+// Legacy v1 voice orchestration; DeviceSessionClient also uses this only after v2 admission.
 export class RealtimeSession {
   private readonly transport: RealtimeTransport;
   private readonly input: RealtimeAudioInput;
@@ -33,6 +36,8 @@ export class RealtimeSession {
   private readonly deviceId?: string;
   private readonly capabilities: RealtimeCapability[];
   private readonly onStateChange?: (state: RealtimeClientSessionState) => void;
+  private readonly admitted: boolean;
+  private readonly acceptOutputFrame?: (frame: AudioFrame) => boolean;
   private readonly sessionId: string;
   private removeMessage?: () => void;
   private removeAudio?: () => void;
@@ -62,8 +67,11 @@ export class RealtimeSession {
     this.deviceId = options.deviceId;
     this.capabilities = options.capabilities ?? DEFAULT_REALTIME_CAPABILITIES;
     this.onStateChange = options.onStateChange;
+    this.admitted = options.admitted ?? false;
+    this.acceptOutputFrame = options.acceptOutputFrame;
 
     this.removeMessage = this.transport.onMessage((message) => {
+      if (this.closed) return;
       this.avatar.handleServerMessage(message);
       if (message.type === "barge_in" && message.state === "ready") {
         this.bargeInReady?.resolve();
@@ -73,12 +81,13 @@ export class RealtimeSession {
       if (message.type === "tts" && message.state === "stop") {
         const epoch = this.avatar.getPlaybackEpoch();
         void this.output.waitForIdle?.()
-          .then(() => this.avatar.handlePlaybackIdle(epoch))
+          .then(() => { if (!this.closed) this.avatar.handlePlaybackIdle(epoch); })
           .catch(() => {});
       }
     });
 
     this.removeAudio = this.transport.onAudio((frame) => {
+      if (this.closed || (this.acceptOutputFrame && !this.acceptOutputFrame(frame))) return;
       this.avatar.handleAudioFrame();
       void this.output.play(frame).catch(() => {});
     });
@@ -113,13 +122,15 @@ export class RealtimeSession {
       await this.transport.waitUntilReady();
       if (this.closed) throw new Error("RealtimeSession is closed");
 
-      await this.transport.send({
-        type: "hello",
-        version: 1,
-        sessionId: this.sessionId,
-        deviceId: this.deviceId,
-        capabilities: this.capabilities,
-      });
+      if (!this.admitted) {
+        await this.transport.send({
+          type: "hello",
+          version: 1,
+          sessionId: this.sessionId,
+          deviceId: this.deviceId,
+          capabilities: this.capabilities,
+        });
+      }
 
       if (this.closed) throw new Error("RealtimeSession is closed");
       this.setState("connected");
@@ -270,6 +281,7 @@ export class RealtimeSession {
     this.bargeInReady = undefined;
     this.setState("closed");
     this.detachTransportHandlers();
+    this.avatar.handleClosed();
 
     this.closePromise = (async () => {
       let cleanupError: unknown;

@@ -6,6 +6,7 @@ import type {
 } from "./protocol";
 import { WebSocketTransport, type WebSocketLike } from "./websocket-transport";
 import type { TransportCodec } from "./transport";
+import { binaryAudioCodec } from "./binary-audio-codec";
 
 class FakeSocket implements WebSocketLike {
   waitForOpen(): Promise<void> {
@@ -93,6 +94,41 @@ describe("WebSocketTransport", () => {
     expect(socket.send).toHaveBeenNthCalledWith(1, JSON.stringify(message));
     expect(socket.send).toHaveBeenNthCalledWith(2, frame.payload);
     expect(socket.close).toHaveBeenCalledWith(1000, "done");
+  });
+
+  it("routes v2 admission separately from realtime voice messages", async () => {
+    const socket = new FakeSocket();
+    const transport = new WebSocketTransport(socket, codec);
+    const admissions: string[] = [];
+    const voiceMessages: string[] = [];
+    transport.onDeviceSession((outcome) => { admissions.push(outcome.type); });
+    transport.onMessage((message) => { voiceMessages.push(message.type); });
+    const hello = {
+      type: "device.hello" as const, protocolVersions: [2],
+      device: { deviceId: "iot-1", platform: "iot" as const },
+      supportedCapabilities: [], availableCapabilities: [],
+    };
+    await transport.sendDeviceHello(hello);
+    socket.receiveMessage(JSON.stringify({
+      type: "device.accepted", version: 2, transportSessionId: "t-1",
+      ownerConnectionId: "c-1", negotiatedCapabilities: [],
+    }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(socket.send).toHaveBeenCalledWith(JSON.stringify(hello));
+    expect(admissions).toEqual(["device.accepted"]);
+    expect(voiceMessages).toEqual([]);
+  });
+
+  it("decodes a real v2 admission response through the production codec", async () => {
+    const socket = new FakeSocket();
+    const transport = new WebSocketTransport(socket, binaryAudioCodec);
+    const outcomes: string[] = [];
+    transport.onDeviceSession((outcome) => { outcomes.push(outcome.type); });
+    socket.receiveMessage(JSON.stringify({
+      type: "device.rejected", reason: "unsupported_version", supportedVersions: [2],
+    }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(outcomes).toEqual(["device.rejected"]);
   });
 
   it("decodes inbound control and audio messages", async () => {
