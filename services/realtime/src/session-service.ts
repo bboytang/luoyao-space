@@ -230,6 +230,8 @@ export class RealtimeSessionService {
     void nextPipelinePromise.finally(() => {
       if (this.pipelinePromise === nextPipelinePromise) this.pipelinePromise = undefined;
     });
+
+    await this.connection.send({ type: "barge_in", state: "ready" });
   }
 
   private async runPipeline(
