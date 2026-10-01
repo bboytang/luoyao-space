@@ -52,7 +52,7 @@ export class PostgresMemoryRepository implements MemoryRepository {
 
   async create(input: CreateMemoryInput): Promise<MemoryRecord> {
     const result = await this.client.query<MemoryRow>(
-      "INSERT INTO memories (user_id, companion_id, kind, content, importance, relationship_relevance, project_relevance, created_at, embedding) VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8::timestamptz,now()),$9::vector) RETURNING id,user_id,companion_id,kind,content,importance,relationship_relevance,project_relevance,project_id,created_at::text,last_accessed_at::text,NULL::double precision AS embedding_score",
+      "INSERT INTO memories (user_id, companion_id, kind, content, importance, relationship_relevance, project_relevance, created_at, embedding, project_id) VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8::timestamptz,now()),$9::vector,$10) RETURNING id,user_id,companion_id,kind,content,importance,relationship_relevance,project_relevance,project_id,created_at::text,last_accessed_at::text,NULL::double precision AS embedding_score",
       [
         input.userId,
         input.companionId,

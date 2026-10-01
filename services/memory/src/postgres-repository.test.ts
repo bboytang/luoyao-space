@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 import { EMBEDDING_DIMENSION, EmbeddingError } from "./embedding";
 import { PostgresMemoryRepository, type SqlClient } from "./postgres-repository";
 
 type QueryCall = [string, readonly unknown[] | undefined];
+const databaseUrl = process.env.DATABASE_URL;
 
 function makeClient(query: ReturnType<typeof vi.fn>): SqlClient {
   return { query } as unknown as SqlClient;
@@ -102,4 +106,40 @@ describe("PostgresMemoryRepository", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
+});
+
+describe("PostgresMemoryRepository with PostgreSQL", () => {
+  it.skipIf(!databaseUrl)("persists and reads a memory by projectId", async () => {
+    const pool = new Pool({ connectionString: databaseUrl });
+    const client = await pool.connect();
+    const schema = `memory_project_${randomUUID().replaceAll("-", "")}`;
+
+    try {
+      await client.query(`CREATE SCHEMA "${schema}"`);
+      await client.query(`SET search_path TO "${schema}", public`);
+      for (const migration of ["001_create_memories.sql", "005_add_memory_project_scope.sql"]) {
+        const sql = await readFile(new URL(`../../../database/migrations/${migration}`, import.meta.url), "utf8");
+        await client.query(sql);
+      }
+
+      const repository = new PostgresMemoryRepository(client);
+      const userId = randomUUID();
+      const companionId = randomUUID();
+      const projectId = randomUUID();
+      const created = await repository.create({
+        userId, companionId, projectId, kind: "project", content: "Project-scoped memory",
+      });
+      const memories = await repository.findProjectMemories({ userId, companionId, projectId, limit: 10 });
+
+      expect(created.projectId).toBe(projectId);
+      expect(memories).toHaveLength(1);
+      expect(memories[0]?.id).toBe(created.id);
+      expect(memories[0]?.projectId).toBe(projectId);
+    } finally {
+      await client.query("RESET search_path");
+      await client.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+      client.release();
+      await pool.end();
+    }
+  });
 });
