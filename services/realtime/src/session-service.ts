@@ -94,7 +94,11 @@ export class RealtimeSessionService {
           await this.handleListen(message.mode, message.conversationId);
           break;
         case "abort":
-          await this.handleAbort();
+          if (message.reason === "barge_in") {
+            await this.handleBargeIn();
+          } else {
+            await this.handleAbort();
+          }
           break;
         case "ping":
           await this.connection.send({ type: "pong", timestamp: message.timestamp });
@@ -163,7 +167,31 @@ export class RealtimeSessionService {
     await this.pipelinePromise;
   }
 
-  private async runPipeline(queue: AudioFrameQueue, controller: AbortController): Promise<void> {
+  private async handleBargeIn(): Promise<void> {
+    const queue = this.queue;
+    const controller = this.controller;
+    const pipelinePromise = this.pipelinePromise;
+    if (!queue || !controller || !pipelinePromise) return;
+
+    controller.abort();
+    await pipelinePromise;
+
+    if (this.closed || this.queue !== queue) return;
+
+    const nextController = new AbortController();
+    this.controller = nextController;
+    const nextPipelinePromise = this.runPipeline(queue, nextController);
+    this.pipelinePromise = nextPipelinePromise;
+    void nextPipelinePromise.finally(() => {
+      if (this.pipelinePromise === nextPipelinePromise) this.pipelinePromise = undefined;
+    });
+  }
+
+  private async runPipeline(
+    queue: AudioFrameQueue,
+    controller: AbortController,
+    preserveQueueOnFinish = false,
+  ): Promise<void> {
     const sessionId = this.sessionId;
     const conversationId = this.conversationId;
     if (!sessionId || !conversationId) return;
@@ -212,7 +240,7 @@ export class RealtimeSessionService {
         true,
       );
     } finally {
-      if (this.queue === queue) this.queue = undefined;
+      if (!preserveQueueOnFinish && this.queue === queue) this.queue = undefined;
       if (this.controller === controller) this.controller = undefined;
       this.ttsMessageId = undefined;
     }
