@@ -266,6 +266,8 @@ export class RealtimeSession {
 
     this.closed = true;
     this.listening = false;
+    this.bargeInReady?.reject(new Error("RealtimeSession is closed"));
+    this.bargeInReady = undefined;
     this.setState("closed");
     this.detachTransportHandlers();
 
@@ -282,6 +284,7 @@ export class RealtimeSession {
         this.connectPromise,
         this.startListeningPromise,
         this.stopListeningPromise,
+        this.interruptPromise,
       ].filter((promise): promise is Promise<void> => promise !== undefined);
 
       await Promise.allSettled(lifecycleOperations);
