@@ -8,6 +8,7 @@ describe("loadRealtimeConfig", () => {
       port: 8787,
       providers: { vad: "demo", asr: "demo", llm: "demo", tts: "demo" },
       openai: undefined,
+      realVoice: undefined,
       development: { enabled: false, legacyV1: false, identity: undefined },
     });
   });
@@ -28,6 +29,7 @@ describe("loadRealtimeConfig", () => {
       port: 9000,
       providers: { vad: "demo", asr: "cloud_asr", llm: "cloud_llm", tts: "cloud_tts" },
       openai: undefined,
+      realVoice: undefined,
       development: { enabled: false, legacyV1: false, identity: undefined },
     });
   });
@@ -39,6 +41,7 @@ describe("loadRealtimeConfig", () => {
         OPENAI_API_KEY: "test-key",
         OPENAI_MODEL: "test-model",
         OPENAI_BASE_URL: "https://example.test/v1",
+        REALTIME_DEV_MODE: "1", REALTIME_DEV_V1_COMPAT: "1",
       }),
     ).toEqual({
       host: "127.0.0.1",
@@ -49,16 +52,35 @@ describe("loadRealtimeConfig", () => {
         model: "test-model",
         baseUrl: "https://example.test/v1",
       },
-      development: { enabled: false, legacyV1: false, identity: undefined },
+      realVoice: undefined,
+      development: { enabled: true, legacyV1: true, identity: undefined },
     });
   });
 
   it("requires OpenAI credentials when selected", () => {
     expect(() =>
       loadRealtimeConfig({
-        REALTIME_LLM_PROVIDER: "openai",
+        REALTIME_LLM_PROVIDER: "openai", REALTIME_DEV_MODE: "1", REALTIME_DEV_V1_COMPAT: "1",
       }),
     ).toThrow("OPENAI_API_KEY and OPENAI_MODEL are required");
+  });
+
+  it("accepts only an explicit complete real voice provider set and fails closed on partial configuration", () => {
+    const real = {
+      REALTIME_ASR_PROVIDER: "openai", REALTIME_LLM_PROVIDER: "brain", REALTIME_TTS_PROVIDER: "openai",
+      REALTIME_BRAIN_MODEL_PROVIDER: "openai", REALTIME_RELATIONSHIP_MODE: "initial",
+      OPENAI_API_KEY: "test-key", OPENAI_ASR_MODEL: "asr-model", OPENAI_MODEL: "brain-model",
+      OPENAI_TTS_MODEL: "tts-model", OPENAI_TTS_VOICE: "alloy",
+      REALTIME_COMPANION_ID: "luoyao", DATABASE_URL: "postgresql://example.test/luoyao",
+    };
+    expect(loadRealtimeConfig(real).realVoice).toMatchObject({
+      asrModel: "asr-model", brainModel: "brain-model", ttsModel: "tts-model", ttsVoice: "alloy",
+      companionId: "luoyao", databaseUrl: "postgresql://example.test/luoyao",
+    });
+    expect(() => loadRealtimeConfig({ ...real, OPENAI_API_KEY: "" })).toThrow(/OPENAI_API_KEY/);
+    expect(() => loadRealtimeConfig({ ...real, REALTIME_TTS_PROVIDER: "demo" })).toThrow(/complete real voice/i);
+    expect(() => loadRealtimeConfig({ ...real, REALTIME_BRAIN_MODEL_PROVIDER: "" })).toThrow(/BRAIN_MODEL_PROVIDER/);
+    expect(() => loadRealtimeConfig({ REALTIME_LLM_PROVIDER: "openai", OPENAI_API_KEY: "key", OPENAI_MODEL: "m" })).toThrow(/v1 development/i);
   });
 
   it("rejects invalid ports", () => {

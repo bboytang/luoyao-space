@@ -40,13 +40,58 @@ M2-A supplies a narrow trusted Realtime-to-Brain turn seed in `src/brain-context
 the v2 admission principal provides `userId`, authorization provides
 `authorizedDeviceId`, and the server supplies separate transport-session and
 conversation IDs. Client-declared IDs and capabilities cannot substitute for
-the principal. The adapter fails closed without admitted identity. It does
-not yet assemble Brain's relationship, memory, companion, signals, model, or
-real ASR/TTS dependencies; that full path belongs to M2-B. Existing provider
-factories already permit ASR/TTS implementations to be injected without
-changing the audio pipeline, but their default implementations remain demos.
+the principal. The adapter fails closed without admitted identity. M2-B routes
+accepted voice turns through Brain's `respondToConversation`, a real PostgreSQL
+Memory service, an explicitly named initial-only relationship snapshot, a
+replaceable model router, and real ASR/TTS providers. This initial snapshot is
+not persistent relationship history or a complete persona/safety system.
 The service rejects inbound and outbound PCM16 frames whose metadata or
 sample alignment differs from the negotiated format.
+
+## Explicit real voice configuration (M2-B)
+
+The default demo providers never make external API calls. To select the real
+server-side path, set all of:
+
+`REALTIME_ASR_PROVIDER=openai`, `REALTIME_LLM_PROVIDER=brain`,
+`REALTIME_TTS_PROVIDER=openai`, `REALTIME_BRAIN_MODEL_PROVIDER=openai`,
+`REALTIME_RELATIONSHIP_MODE=initial`, `OPENAI_API_KEY`, `OPENAI_ASR_MODEL`,
+`OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_TTS_VOICE`,
+`REALTIME_COMPANION_ID`, and `DATABASE_URL`. Optional provider endpoints are
+`OPENAI_ASR_URL` and `OPENAI_BASE_URL`. The PostgreSQL schema must already have
+been migrated with `pnpm db:migrate`. A partial real-provider selection fails
+at configuration load; direct Realtime-to-OpenAI LLM generation remains only
+in explicit legacy v1 development mode, never the v2 real voice path.
+
+This does not add production authentication. The default v2 admission still
+fails closed without a trusted principal and device authorizer; the explicit
+loopback development identity remains the only bundled admission path.
+
+External data flow for this opt-in configuration:
+
+- ASR receives the current turn's 24 kHz mono PCM16 audio (base64-encoded over
+  the provider's transcription WebSocket), selected model and optional language.
+- Brain's external model receives only the current transcript and static Luoyao
+  response instructions derived from the current behavior policy. It receives
+  no user/device/session IDs, relationship snapshot, or retrieved long-term
+  memory. `MemoryIsolatedVoiceModel` constructs a fresh allowlist object before
+  any model provider is selected; the OpenAI provider independently constructs
+  its outbound body from that object.
+- TTS receives the generated reply text, selected model and voice. Its raw
+  speech PCM is aligned at the provider boundary and emitted as 24 kHz mono
+  little-endian signed PCM16. Empty, silent or malformed responses fail.
+
+Retrieving memory is **not** permission to disclose it. A later privacy design
+must explicitly classify retrieved memories and apply a disclosure policy
+before provider-allowed context is constructed. M2-B conservatively excludes
+all retrieved long-term memory from external model requests.
+
+`pnpm realtime:smoke:live` is an explicit paid-provider smoke path, guarded by
+`M2B_LIVE_SMOKE=1` and the real configuration above plus a loopback development
+identity (`REALTIME_DEV_MODE=1`, `REALTIME_DEV_USER_ID`, `REALTIME_DEV_DEVICE_ID`).
+It synthesizes a repository-safe test phrase at runtime, then checks real ASR,
+Brain/model, TTS and non-silent output. It is not part of `pnpm test` or CI,
+does not save recordings, and does not test production authentication.
 
 ## Target pipeline
 
@@ -57,8 +102,8 @@ audio input
 -> TTS
 -> audio output
 
-Automatic VAD and real provider/Brain assembly are not part of M2-A; the first
-real voice slice may use explicit push-to-talk turn boundaries. A direct
+Automatic VAD is not part of M2-B; the first real voice slice uses explicit
+push-to-talk turn boundaries. A direct
 speech-to-speech path that bypasses Brain is not the approved architecture.
 
 Supports:

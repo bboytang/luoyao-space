@@ -31,6 +31,7 @@ export interface OpenAiAsrOptions {
   readonly url?: string;
   readonly sampleRate?: number;
   readonly language?: string;
+  readonly timeoutMs?: number;
   readonly socketFactory: OpenAiAsrSocketFactory;
 }
 
@@ -52,13 +53,17 @@ function toBase64(payload: Uint8Array): string {
   return btoa(binary);
 }
 
-function createAudioAppend(frame: AudioFrame): string {
+function createAudioAppend(frame: AudioFrame, sampleRate: number): string {
   if (frame.codec !== "pcm_s16le") {
     throw new Error("OpenAI realtime transcription requires PCM16 audio");
   }
 
   if (frame.channels !== 1) {
     throw new Error("OpenAI realtime transcription requires mono audio");
+  }
+
+  if (frame.sampleRate !== sampleRate || frame.payload.length % 2 !== 0) {
+    throw new Error(`OpenAI realtime transcription requires ${sampleRate} Hz aligned PCM16 samples`);
   }
 
   return JSON.stringify({
@@ -83,6 +88,9 @@ export class OpenAiAsrProvider implements AsrProvider {
     if (!Number.isInteger(options.sampleRate ?? 24000) || (options.sampleRate ?? 24000) <= 0) {
       throw new Error("OpenAI ASR sample rate must be a positive integer");
     }
+    if (!Number.isInteger(options.timeoutMs ?? 120_000) || (options.timeoutMs ?? 120_000) <= 0) {
+      throw new Error("OpenAI ASR timeout must be a positive integer");
+    }
   }
 
   async *transcribe(
@@ -90,7 +98,7 @@ export class OpenAiAsrProvider implements AsrProvider {
     context: AudioStreamContext,
   ): AsyncIterable<AsrEvent> {
     const socket = this.options.socketFactory.create(
-      this.options.url ?? "wss://api.openai.com/v1/realtime",
+      this.options.url ?? "wss://api.openai.com/v1/realtime?intent=transcription",
       { headers: { Authorization: `Bearer ${this.options.apiKey}` } },
     );
 
@@ -118,7 +126,7 @@ export class OpenAiAsrProvider implements AsrProvider {
                 format: { type: "audio/pcm", rate: this.options.sampleRate ?? 24000 },
                 transcription: {
                   model: this.options.model,
-                  ...(this.options.language ? { language: this.options.language } : {}),
+                  ...(this.options.language ? { languages: [this.options.language] } : {}),
                 },
                 turn_detection: null,
               },
@@ -157,7 +165,8 @@ export class OpenAiAsrProvider implements AsrProvider {
     const nextEvent = async (): Promise<OpenAiAsrServerEvent | undefined> => {
       while (queue.length === 0) {
         if (failure) throw failure;
-        if (closed) return undefined;
+        if (closed) throw new Error("OpenAI realtime transcription closed without a final transcript");
+        if (context.signal.aborted) return undefined;
         await new Promise<void>((resolve) => {
           wake = resolve;
         });
@@ -165,19 +174,30 @@ export class OpenAiAsrProvider implements AsrProvider {
       return queue.shift();
     };
 
+    const onAbort = () => { socket.close(); notify(); };
+    context.signal.addEventListener("abort", onAbort, { once: true });
+    const timeout = setTimeout(() => {
+      failure = new Error("OpenAI realtime transcription timed out");
+      socket.close();
+      notify();
+    }, this.options.timeoutMs ?? 120_000);
+
     try {
       while (!opened && !context.signal.aborted) {
         await new Promise<void>((resolve) => {
           wake = resolve;
         });
         if (failure) throw failure;
-        if (closed) throw new Error("OpenAI realtime transcription socket closed before open");
+        if (closed && !context.signal.aborted) throw new Error("OpenAI realtime transcription socket closed before open");
       }
+
+      if (context.signal.aborted) return;
 
       for await (const frame of frames) {
         if (context.signal.aborted) return;
+        if (closed) throw new Error("OpenAI realtime transcription closed without a final transcript");
 
-        socket.send(createAudioAppend(frame));
+        socket.send(createAudioAppend(frame, this.options.sampleRate ?? 24000));
 
         while (queue.length > 0) {
           const event = queue.shift()!;
@@ -215,6 +235,8 @@ export class OpenAiAsrProvider implements AsrProvider {
         }
       }
     } finally {
+      clearTimeout(timeout);
+      context.signal.removeEventListener("abort", onAbort);
       socket.removeEventListener("open", onOpen);
       socket.removeEventListener("message", onMessage);
       socket.removeEventListener("error", onError);

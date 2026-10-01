@@ -9,6 +9,14 @@ import {
 } from "./provider-registry";
 
 describe("createRealtimePipeline", () => {
+  it("offers real ASR and TTS only with explicit credentials and keeps Brain injection required", () => {
+    const factories = createDefaultRealtimeProviderFactories();
+    expect(() => factories.asr.openai?.({ model: "asr" })).toThrow(/apiKey/i);
+    expect(() => factories.tts.openai?.({ model: "tts", voice: "alloy" })).toThrow(/apiKey/i);
+    expect(factories.asr.openai?.({ apiKey: "key", model: "asr" })).toBeDefined();
+    expect(factories.tts.openai?.({ apiKey: "key", model: "tts", voice: "alloy" })).toBeDefined();
+    expect(() => factories.llm.brain?.()).toThrow(/Brain.*not configured/i);
+  });
   it("registers OpenAI as the default LLM provider", () => {
     const factories = createDefaultRealtimeProviderFactories();
     const provider = factories.llm.openai?.({

@@ -43,10 +43,10 @@ const frame: AudioFrame = {
   payload: new Uint8Array([1, 2, 3, 4]),
 };
 
-const context = (): AudioStreamContext => ({
+const context = (signal = new AbortController().signal): AudioStreamContext => ({
   sessionId: "session-1",
   conversationId: "conversation-1",
-  signal: new AbortController().signal,
+  signal,
 });
 
 describe("OpenAiAsrProvider", () => {
@@ -158,5 +158,74 @@ describe("OpenAiAsrProvider", () => {
       model: "",
       socketFactory: factory,
     })).toThrow("OpenAI ASR model is required");
+  });
+
+  it("defaults to the transcription WebSocket endpoint rather than an assistant voice session", async () => {
+    const socket = new FakeSocket();
+    let connectedUrl = "";
+    const provider = new OpenAiAsrProvider({ apiKey: "key", model: "gpt-live-transcribe",
+      socketFactory: { create(url) { connectedUrl = url; return socket; } } });
+    const iterator = provider.transcribe((async function* () {})(), context())[Symbol.asyncIterator]();
+    const result = iterator.next();
+    expect(connectedUrl).toBe("wss://api.openai.com/v1/realtime?intent=transcription");
+    socket.emit("open", {});
+    socket.emit("message", { data: JSON.stringify({ type: "conversation.item.input_audio_transcription.completed", transcript: "你好" }) });
+    await result;
+  });
+
+  it("uses the current transcription API's languages array when a language hint is configured", async () => {
+    const socket = new FakeSocket();
+    const provider = new OpenAiAsrProvider({ apiKey: "key", model: "gpt-live-transcribe",
+      language: "zh-cn", socketFactory: { create: () => socket } });
+    const iterator = provider.transcribe((async function* () { yield frame; })(), context())[Symbol.asyncIterator]();
+    const result = iterator.next();
+    socket.emit("open", {});
+    expect(JSON.parse(socket.sent[0]).session.audio.input.transcription).toEqual({
+      model: "gpt-live-transcribe", languages: ["zh-cn"],
+    });
+    socket.emit("message", { data: JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed", transcript: "你好",
+    }) });
+    await expect(result).resolves.toMatchObject({ value: { type: "final", text: "你好" } });
+  });
+
+  it("terminates a pending provider session on cancellation before socket open", async () => {
+    const socket = new FakeSocket();
+    const abort = new AbortController();
+    const provider = new OpenAiAsrProvider({ apiKey: "key", model: "model", socketFactory: { create: () => socket } });
+    const iterator = provider.transcribe((async function* () {})(), context(abort.signal))[Symbol.asyncIterator]();
+    const result = iterator.next();
+    abort.abort();
+    await expect(result).resolves.toMatchObject({ done: true });
+  });
+
+  it("fails when transcription closes without a final transcript", async () => {
+    const socket = new FakeSocket();
+    const provider = new OpenAiAsrProvider({ apiKey: "key", model: "model", socketFactory: { create: () => socket } });
+    const iterator = provider.transcribe((async function* () { yield frame; })(), context())[Symbol.asyncIterator]();
+    const result = iterator.next();
+    socket.emit("open", {});
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    socket.emit("close", {});
+    await expect(result).rejects.toThrow(/closed without.*transcript/i);
+  });
+
+  it("times out a committed turn when the provider never returns a final transcript", async () => {
+    const socket = new FakeSocket();
+    const provider = new OpenAiAsrProvider({ apiKey: "key", model: "model", timeoutMs: 20,
+      socketFactory: { create: () => socket } });
+    const iterator = provider.transcribe((async function* () { yield frame; })(), context())[Symbol.asyncIterator]();
+    const result = iterator.next();
+    socket.emit("open", {});
+    await expect(result).rejects.toThrow(/timed out/i);
+  });
+
+  it("rejects an input format that does not match configured 24 kHz PCM16 mono", async () => {
+    const socket = new FakeSocket();
+    const provider = new OpenAiAsrProvider({ apiKey: "key", model: "model", socketFactory: { create: () => socket } });
+    const iterator = provider.transcribe((async function* () { yield { ...frame, sampleRate: 16_000 }; })(), context())[Symbol.asyncIterator]();
+    const result = iterator.next();
+    socket.emit("open", {});
+    await expect(result).rejects.toThrow(/24.?000|sample rate/i);
   });
 });

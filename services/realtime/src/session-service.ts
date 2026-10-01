@@ -280,11 +280,13 @@ export class RealtimeSessionService {
           continue;
         }
 
-        if (
-          output.type === "completed" ||
-          output.type === "aborted" ||
-          output.type === "error"
-        ) {
+        if (output.type === "error") {
+          await this.finishTts();
+          await this.sendError("pipeline_error", output.error?.message ?? "Realtime provider failed", true);
+          continue;
+        }
+
+        if (output.type === "completed" || output.type === "aborted") {
           await this.finishTts();
         }
       }

@@ -103,6 +103,23 @@ const pipeline: AudioPipeline = {
 };
 
 describe("RealtimeSessionService", () => {
+  it("sends a deterministic error when a provider fails during an admitted turn", async () => {
+    const connection = new FakeConnection();
+    const failed: AudioPipeline = {
+      ...pipeline,
+      asr: { async *transcribe(frames) {
+        for await (const _frame of frames) throw new Error("ASR upstream unavailable");
+      } },
+    };
+    new RealtimeSessionService(connection, failed, {
+      admittedSessionId: "transport-1", trustedIdentity: { userId: "user-1", authorizedDeviceId: "device-1" },
+    });
+    await connection.control({ type: "listen", mode: "start" });
+    await connection.pushAudio(frame);
+    await connection.control({ type: "listen", mode: "stop" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(connection.messages).toContainEqual({ type: "error", code: "pipeline_error", message: "ASR upstream unavailable", retryable: true });
+  });
   it("emits fixture STT and TTS controls from an accepted v2 voice turn", async () => {
     const connection = new FakeConnection();
     new RealtimeSessionService(connection, createDemoRealtimePipeline(), {

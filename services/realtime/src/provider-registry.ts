@@ -5,8 +5,11 @@ import type {
   TtsProvider,
   VadProvider,
 } from "../../../runtimes/realtime-device/src/audio-pipeline";
+import WebSocket from "ws";
 import { createDemoRealtimePipeline } from "./demo-pipeline";
+import { OpenAiAsrProvider, type OpenAiAsrSocket } from "./providers/openai-asr";
 import { OpenAiLlmProvider } from "./providers/openai-llm";
+import { OpenAiTtsProvider } from "./providers/openai-tts";
 
 export interface ProviderOptions {
   readonly [key: string]: unknown;
@@ -39,14 +42,28 @@ function requireStringOption(options: ProviderOptions | undefined, name: string)
   return value;
 }
 
-export function createDefaultRealtimeProviderFactories(): RealtimeProviderFactories {
+export function createDefaultRealtimeProviderFactories(brain?: LlmProvider): RealtimeProviderFactories {
   const demo = createDemoRealtimePipeline();
 
   return {
     vad: { demo: () => demo.vad },
-    asr: { demo: () => demo.asr },
+    asr: {
+      demo: () => demo.asr,
+      openai: (options) => new OpenAiAsrProvider({
+        apiKey: requireStringOption(options, "apiKey"),
+        model: requireStringOption(options, "model"),
+        url: typeof options?.url === "string" ? options.url : undefined,
+        socketFactory: {
+          create: (url, socketOptions) => new WebSocket(url, { headers: socketOptions.headers }) as unknown as OpenAiAsrSocket,
+        },
+      }),
+    },
     llm: {
       demo: () => demo.llm,
+      brain: () => {
+        if (!brain) throw new Error("Brain is not configured for realtime voice");
+        return brain;
+      },
       openai: (options) =>
         new OpenAiLlmProvider({
           apiKey: requireStringOption(options, "apiKey"),
@@ -54,7 +71,15 @@ export function createDefaultRealtimeProviderFactories(): RealtimeProviderFactor
           baseUrl: typeof options?.baseUrl === "string" ? options.baseUrl : undefined,
         }),
     },
-    tts: { demo: () => demo.tts },
+    tts: {
+      demo: () => demo.tts,
+      openai: (options) => new OpenAiTtsProvider({
+        apiKey: requireStringOption(options, "apiKey"),
+        model: requireStringOption(options, "model"),
+        voice: requireStringOption(options, "voice"),
+        baseUrl: typeof options?.baseUrl === "string" ? options.baseUrl : undefined,
+      }),
+    },
   };
 }
 

@@ -23,6 +23,7 @@ export interface ConversationModelRequest {
   policy: BehaviorPolicy;
   memories: ConversationMemory[];
   relationship: RelationshipSnapshot;
+  signal?: AbortSignal;
 }
 
 export interface ConversationModel {
@@ -63,6 +64,7 @@ export interface ConversationRequest {
   companionId: string;
   sessionId?: string;
   userMessage: string;
+  signal?: AbortSignal;
   memoryWriteSignals?: Omit<MemoryWriteSignals, "userMessage">;
   signals: Omit<ConversationSignals, "relationshipStage" | "userInitiative"> & {
     recentQuestionCount: number;
@@ -122,6 +124,7 @@ export async function respondToConversation(
     policy,
     memories,
     relationship,
+    signal: request.signal,
   });
 
   if (dependencies.events) {
