@@ -32,3 +32,7 @@ Never commit:
 - session secrets
 
 Use environment variables or a production secret manager.
+
+## Database migrations
+
+Use the [PostgreSQL migration deployment runbook](deployment/database-migrations.md) for fresh deployments, prerequisites, existing-database adoption and recovery. Do not run the fresh-database path against an existing schema without verified migration history.

@@ -73,10 +73,170 @@ describe("PostgreSQL migration runner", () => {
 
   it.skipIf(!databaseUrl)("does not record a failed migration as applied", async () => {
     await withSchema(async (_pool, client) => {
-      await client.query("CREATE TABLE memories (id integer)");
-      await expect(runMigrations(client)).rejects.toThrow();
+      await client.query(`
+        CREATE TABLE schema_migrations (
+          migration_id TEXT PRIMARY KEY,
+          checksum TEXT NOT NULL,
+          applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await client.query(`
+        CREATE FUNCTION reject_history_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'history write failed'; END $$
+      `);
+      await client.query(`
+        CREATE TRIGGER reject_history_insert BEFORE INSERT ON schema_migrations
+        FOR EACH ROW EXECUTE FUNCTION reject_history_insert()
+      `);
+
+      await expect(runMigrations(client)).rejects.toThrow(/history write failed/i);
       const history = await client.query<{ migration_id: string }>("SELECT migration_id FROM schema_migrations");
       expect(history.rows).toEqual([]);
+      const table = await client.query<{ table_name: string | null }>(
+        "SELECT to_regclass(format('%I.memories', current_schema()))::text AS table_name",
+      );
+      expect(table.rows[0]?.table_name).toBeNull();
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses an existing target schema without migration history before writing anything", async () => {
+    await withSchema(async (_pool, client) => {
+      await client.query("CREATE TABLE legacy_data (id integer)");
+
+      await expect(runMigrations(client)).rejects.toThrow(/existing schema.*without migration history/i);
+      const history = await client.query<{ history: string | null }>(
+        "SELECT to_regclass(format('%I.schema_migrations', current_schema()))::text AS history",
+      );
+      expect(history.rows[0]?.history).toBeNull();
+      const legacy = await client.query<{ count: string }>("SELECT count(*) FROM legacy_data");
+      expect(Number(legacy.rows[0]?.count)).toBe(0);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses a history table that cannot record applied timestamps", async () => {
+    await withSchema(async (_pool, client) => {
+      await client.query("CREATE TABLE schema_migrations (migration_id text PRIMARY KEY, checksum text NOT NULL)");
+
+      await expect(runMigrations(client)).rejects.toThrow(/migration history table schema mismatch.*applied_at/i);
+      const table = await client.query<{ table_name: string | null }>(
+        "SELECT to_regclass(format('%I.memories', current_schema()))::text AS table_name",
+      );
+      expect(table.rows[0]?.table_name).toBeNull();
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses a history table without migration ID uniqueness", async () => {
+    await withSchema(async (_pool, client) => {
+      await client.query(`
+        CREATE TABLE schema_migrations (
+          migration_id text NOT NULL,
+          checksum text NOT NULL,
+          applied_at timestamptz NOT NULL DEFAULT now()
+        )
+      `);
+
+      await expect(runMigrations(client)).rejects.toThrow(/migration history table schema mismatch.*primary key/i);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses a temporary target schema", async () => {
+    await withSchema(async (_pool, client) => {
+      await client.query("CREATE TEMP TABLE temp_marker (id integer)");
+      await client.query("DROP TABLE temp_marker");
+      await client.query("SET search_path TO pg_temp, public");
+
+      await expect(runMigrations(client)).rejects.toThrow(/temporary migration target schema/i);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses a history gap instead of silently replaying an earlier migration", async () => {
+    await withSchema(async (_pool, client) => {
+      await runMigrations(client);
+      await client.query("DELETE FROM schema_migrations WHERE migration_id = $1", [migrationIds[0]]);
+
+      await expect(runMigrations(client)).rejects.toThrow(/migration history.*ordered prefix/i);
+      const history = await client.query<{ count: string }>("SELECT count(*) FROM schema_migrations");
+      expect(Number(history.rows[0]?.count)).toBe(5);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses missing schema objects claimed by migration history", async () => {
+    await withSchema(async (_pool, client) => {
+      await runMigrations(client);
+      await client.query("DROP TABLE tasks");
+
+      await expect(runMigrations(client)).rejects.toThrow(/schema\/history mismatch.*tasks/i);
+      const history = await client.query<{ count: string }>("SELECT count(*) FROM schema_migrations");
+      expect(Number(history.rows[0]?.count)).toBe(6);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses a changed column type claimed by migration history", async () => {
+    await withSchema(async (_pool, client) => {
+      await runMigrations(client);
+      await client.query("ALTER TABLE memories ALTER COLUMN content TYPE varchar(10)");
+
+      await expect(runMigrations(client)).rejects.toThrow(/schema\/history mismatch.*memories\.content/i);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses an untracked column on a migration-owned table", async () => {
+    await withSchema(async (_pool, client) => {
+      await runMigrations(client);
+      await client.query("ALTER TABLE memories ADD COLUMN untracked text");
+
+      await expect(runMigrations(client)).rejects.toThrow(/schema\/history mismatch.*memories\.untracked/i);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses a removed check constraint claimed by migration history", async () => {
+    await withSchema(async (_pool, client) => {
+      await runMigrations(client);
+      await client.query("ALTER TABLE tasks DROP CONSTRAINT tasks_status_check");
+
+      await expect(runMigrations(client)).rejects.toThrow(/schema\/history mismatch.*tasks_status_check/i);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses a changed index definition with the expected name", async () => {
+    await withSchema(async (_pool, client) => {
+      await runMigrations(client);
+      await client.query("DROP INDEX tasks_running_lease_idx");
+      await client.query("CREATE INDEX tasks_running_lease_idx ON tasks (status)");
+
+      await expect(runMigrations(client)).rejects.toThrow(/schema\/history mismatch.*tasks_running_lease_idx/i);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses a changed column default claimed by migration history", async () => {
+    await withSchema(async (_pool, client) => {
+      await runMigrations(client);
+      await client.query("ALTER TABLE memories ALTER COLUMN importance SET DEFAULT 0.9");
+
+      await expect(runMigrations(client)).rejects.toThrow(/schema\/history mismatch.*memories\.importance/i);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses relaxed nullability claimed by migration history", async () => {
+    await withSchema(async (_pool, client) => {
+      await runMigrations(client);
+      await client.query("ALTER TABLE memories ALTER COLUMN content DROP NOT NULL");
+
+      await expect(runMigrations(client)).rejects.toThrow(/schema\/history mismatch.*memories\.content/i);
+    });
+  }, 30_000);
+
+  it.skipIf(!databaseUrl)("refuses objects from migrations not yet recorded in history", async () => {
+    await withSchema(async (_pool, client) => {
+      await runMigrations(client);
+      await client.query(
+        "DELETE FROM schema_migrations WHERE migration_id = ANY($1::text[])",
+        [migrationIds.slice(1)],
+      );
+
+      await expect(runMigrations(client)).rejects.toThrow(/schema\/history mismatch.*agent_tasks/i);
+      const history = await client.query<{ count: string }>("SELECT count(*) FROM schema_migrations");
+      expect(Number(history.rows[0]?.count)).toBe(1);
     });
   }, 30_000);
 
