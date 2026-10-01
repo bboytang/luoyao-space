@@ -255,7 +255,7 @@ struct ServerVoiceControl: Decodable {
 
     private func awaitOldTurnStop(owner: Int) async throws {
         if ttsServerEnded { return }
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             guard owner == generation, oldTurnWaiter == nil else {
                 continuation.resume(throwing: VoiceAudioError.notAccepted)
                 return
