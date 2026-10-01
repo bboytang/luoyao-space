@@ -1,0 +1,44 @@
+name: LuoyaoIOS
+options:
+  bundleIdPrefix: space.luoyao
+  createIntermediateGroups: true
+  xcodeVersion: "16.4"
+  projectFormat: xcode16_3
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    CODE_SIGNING_ALLOWED: NO
+targets:
+  LuoyaoIOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: LuoyaoIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: space.luoyao.ios
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+  LuoyaoIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: LuoyaoIOSTests
+      - path: ../../packages/protocol/src/m2-wire-fixtures.json
+        buildPhase: resources
+    dependencies:
+      - target: LuoyaoIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: space.luoyao.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  LuoyaoIOS:
+    build:
+      targets:
+        LuoyaoIOS: all
+    test:
+      targets:
+        - LuoyaoIOSTests

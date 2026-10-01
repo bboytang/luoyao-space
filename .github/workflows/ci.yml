@@ -45,3 +45,23 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  ios:
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select pinned Xcode 16.4
+        run: |
+          xcodebuild -version
+          xcodebuild -version | grep -Fx 'Xcode 16.4'
+      - name: Generate native Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen --version
+          xcodegen generate --spec apps/ios/project.yml
+      - name: Build unsigned iOS simulator app
+        run: xcodebuild -project apps/ios/LuoyaoIOS.xcodeproj -scheme LuoyaoIOS -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+      - name: Run shared-wire XCTest on iOS simulator
+        run: xcodebuild -project apps/ios/LuoyaoIOS.xcodeproj -scheme LuoyaoIOS -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5' CODE_SIGNING_ALLOWED=NO test
