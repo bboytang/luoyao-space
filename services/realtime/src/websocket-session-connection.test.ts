@@ -69,16 +69,13 @@ describe("WebSocketSessionConnection", () => {
     const socket = new FakeSocket();
     const connection = new WebSocketSessionConnection(socket);
     let releaseFirst!: () => void;
-    let firstStarted!: () => void;
     let resolvePingSeen!: () => void;
-    const firstStartedPromise = new Promise<void>((resolve) => { firstStarted = resolve; });
     const pingSeen = new Promise<void>((resolve) => { resolvePingSeen = resolve; });
     const seen: string[] = [];
 
     connection.onControl(async (message) => {
       seen.push(message.type);
       if (message.type === "hello") {
-        firstStarted();
         await new Promise<void>((resolve) => { releaseFirst = resolve; });
       } else if (message.type === "ping") {
         resolvePingSeen();
@@ -90,7 +87,7 @@ describe("WebSocketSessionConnection", () => {
       version: 1,
       sessionId: "session-1",
     }));
-    await firstStartedPromise;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
     const second = socket.receive(JSON.stringify({
       type: "ping",
