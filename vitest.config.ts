@@ -2,7 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["services/**/*.test.ts", "runtimes/**/*.test.ts", "database/**/*.test.ts"],
+    include: ["packages/**/*.test.ts", "services/**/*.test.ts", "runtimes/**/*.test.ts", "database/**/*.test.ts"],
     // Database integration files share a database-wide extension; serialize files when it is enabled.
     fileParallelism: !process.env.DATABASE_URL,
   },
