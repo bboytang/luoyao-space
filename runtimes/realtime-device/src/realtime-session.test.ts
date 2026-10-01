@@ -232,6 +232,22 @@ describe("RealtimeSession", () => {
     expect(settled).toBe(true);
   });
 
+  it("settles an in-flight barge-in when the session closes", async () => {
+    const { session, transport } = createSession();
+
+    const interrupt = session.interruptResponse();
+
+    await vi.waitFor(() => {
+      expect(transport.send).toHaveBeenCalledWith({
+        type: "abort",
+        reason: "barge_in",
+      });
+    });
+
+    await session.close();
+    await expect(interrupt).rejects.toThrow("RealtimeSession is closed");
+  });
+
   it("holds input audio until barge-in handoff is acknowledged", async () => {
     const { session, input, transport } = createSession();
     let onFrame!: (frame: AudioFrame) => void;
