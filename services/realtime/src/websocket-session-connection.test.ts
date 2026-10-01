@@ -6,7 +6,7 @@ import { WebSocketSessionConnection } from "./websocket-session-connection";
 class FakeSocket implements ServerWebSocketLike {
   readonly sent: Array<string | Uint8Array> = [];
   readonly closes: Array<{ code?: number; reason?: string }> = [];
-  private messageHandlers: Array<(event: { data: string | Uint8Array | ArrayBuffer }) => void> = [];
+  private messageHandlers: Array<(event: { data: string | Uint8Array | ArrayBuffer }) => void | Promise<void>> = [];
   private closeHandlers: Array<() => void> = [];
 
   send(data: string | Uint8Array): void {
@@ -15,17 +15,16 @@ class FakeSocket implements ServerWebSocketLike {
 
   close(code?: number, reason?: string): void {
     this.closes.push({ code, reason });
-    for (const handler of this.closeHandlers) handler();
+    for (const handler of this.closeHandlers) void handler();
   }
 
-  addEventListener(type: "message" | "close", listener: ((event: { data: string | Uint8Array | ArrayBuffer }) => void) | (() => void)): void {
-    if (type === "message") this.messageHandlers.push(listener as (event: { data: string | Uint8Array | ArrayBuffer }) => void);
+  addEventListener(type: "message" | "close", listener: ((event: { data: string | Uint8Array | ArrayBuffer }) => void | Promise<void>) | (() => void)): void {
+    if (type === "message") this.messageHandlers.push(listener as (event: { data: string | Uint8Array | ArrayBuffer }) => void | Promise<void>);
     else this.closeHandlers.push(listener as () => void);
   }
 
   async receive(data: string | Uint8Array): Promise<void> {
-    for (const handler of this.messageHandlers) handler({ data });
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await Promise.all(this.messageHandlers.map((handler) => handler({ data })));
   }
 }
 
