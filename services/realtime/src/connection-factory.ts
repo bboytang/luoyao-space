@@ -6,7 +6,7 @@ import type {
   TrustedPrincipalProvider,
 } from "../../device-runtime/src/session-boundary";
 import type { RealtimeConfig } from "./config";
-import { DeviceSessionAdmission } from "./device-session-admission";
+import { DeviceSessionAdmission, type DeviceSessionCapabilityDiagnostic } from "./device-session-admission";
 import { RealtimeSessionService } from "./session-service";
 import { WebSocketSessionConnection, type ServerWebSocketLike } from "./websocket-session-connection";
 
@@ -19,6 +19,7 @@ const serverCapabilities: readonly DeviceCapabilityOffer[] = [
 export interface RealtimeAdmissionProviders<ConnectionContext> {
   principalProvider?: TrustedPrincipalProvider<ConnectionContext>;
   deviceAuthorizer?: DeviceAuthorizationProvider;
+  onCapabilityNegotiationDiagnostic?: (diagnostic: DeviceSessionCapabilityDiagnostic) => void;
 }
 
 export function attachRealtimeConnection<ConnectionContext>(
@@ -50,5 +51,6 @@ export function attachRealtimeConnection<ConnectionContext>(
         : undefined,
     ownership,
     serverCapabilities,
+    onCapabilityNegotiationDiagnostic: providers.onCapabilityNegotiationDiagnostic,
   });
 }

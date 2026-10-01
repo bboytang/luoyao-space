@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AudioPipeline } from "../../../runtimes/realtime-device/src/audio-pipeline";
 import { InMemoryDeviceSessionOwnership } from "../../device-runtime/src/session-boundary";
 import { loadRealtimeConfig } from "./config";
@@ -32,6 +32,12 @@ const hello = (deviceId = "device-1") => ({
   type: "device.hello", protocolVersions: [2],
   device: { deviceId, platform: "ios" }, supportedCapabilities: [], availableCapabilities: [],
 });
+const pcm = { codec: "pcm_s16le" as const, sampleRateHz: 24_000, channels: 1 };
+const voiceCapabilities = [
+  { id: "realtime.voice" as const },
+  { id: "audio.input" as const, formats: [pcm] },
+  { id: "audio.output" as const, formats: [pcm] },
+];
 
 describe("realtime connection wiring", () => {
   it("uses v2 and fails closed by default without a trusted provider", async () => {
@@ -63,5 +69,36 @@ describe("realtime connection wiring", () => {
     attachRealtimeConnection(authorized, {}, pipeline, config, ownership);
     await authorized.receive(hello());
     expect(authorized.controls()[0]).toMatchObject({ type: "device.accepted", version: 2 });
+  });
+
+  it("forwards sanitized capability diagnostics for an accepted v2 session", async () => {
+    const config = loadRealtimeConfig({
+      REALTIME_DEV_MODE: "1", REALTIME_DEV_USER_ID: "user-1", REALTIME_DEV_DEVICE_ID: "device-1",
+    });
+    const socket = new FakeSocket();
+    const diagnostic = vi.fn();
+    attachRealtimeConnection(socket, {}, pipeline, config, new InMemoryDeviceSessionOwnership(), {
+      onCapabilityNegotiationDiagnostic: diagnostic,
+    });
+    await socket.receive({
+      ...hello(),
+      supportedCapabilities: voiceCapabilities,
+      availableCapabilities: voiceCapabilities,
+      authorization: "Bearer private-token",
+    });
+
+    expect(diagnostic).toHaveBeenCalledWith({
+      clientAvailableCapabilities: [
+        { id: "realtime.voice" },
+        { id: "audio.input", formats: [pcm] },
+        { id: "audio.output", formats: [pcm] },
+      ],
+      negotiatedCapabilities: [
+        { id: "realtime.voice" },
+        { id: "audio.input", format: pcm },
+        { id: "audio.output", format: pcm },
+      ],
+    });
+    expect(JSON.stringify(diagnostic.mock.calls)).not.toContain("private-token");
   });
 });

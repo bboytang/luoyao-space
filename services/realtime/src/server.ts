@@ -29,7 +29,12 @@ const physicalDevelopmentProviders = config.physicalDevelopment
 const server = new WebSocketServer({ host, port });
 
 server.on("connection", (socket: WebSocket, request) => {
-  attachRealtimeConnection(socket, request, pipeline, config, ownership, physicalDevelopmentProviders);
+  attachRealtimeConnection(socket, request, pipeline, config, ownership, {
+    ...physicalDevelopmentProviders,
+    onCapabilityNegotiationDiagnostic: (diagnostic) => {
+      console.info("Device Session capability negotiation", diagnostic);
+    },
+  });
 });
 
 server.on("listening", () => {

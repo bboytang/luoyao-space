@@ -54,6 +54,7 @@ function createHarness(options: {
   connectionId?: string;
   finalTranscript?: string;
   ttsFrame?: import("../../../runtimes/realtime-device/src/protocol").AudioFrame;
+  onCapabilityNegotiationDiagnostic?: (diagnostic: unknown) => void;
 } = {}) {
   const socket = new FakeSocket();
   const ownership = options.ownership ?? new InMemoryDeviceSessionOwnership();
@@ -87,11 +88,50 @@ function createHarness(options: {
     createTransportSessionId: () => options.transportSessionId ?? "transport-1",
     createConnectionId: () => options.connectionId ?? "connection-1",
     createConversationId: () => "conversation-1",
+    onCapabilityNegotiationDiagnostic: options.onCapabilityNegotiationDiagnostic,
   });
   return { socket, ownership, receivedFrames, authorization, pipeline, admission, llmContexts };
 }
 
 describe("v2 realtime device admission", () => {
+  it("reports only sanitized available and negotiated capability metadata", async () => {
+    const diagnostic = vi.fn();
+    const { socket } = createHarness({
+      serverCapabilities: voiceCapabilities,
+      onCapabilityNegotiationDiagnostic: diagnostic,
+    });
+    await socket.receive(JSON.stringify({
+      ...hello({
+        supportedCapabilities: voiceCapabilities,
+        availableCapabilities: voiceCapabilities,
+      }),
+      authorization: "Bearer private-token",
+      userId: "private-user",
+      transportSessionId: "client-session",
+      transcript: "private transcript",
+    }));
+
+    expect(diagnostic).toHaveBeenCalledOnce();
+    expect(diagnostic).toHaveBeenCalledWith({
+      clientAvailableCapabilities: [
+        { id: "realtime.voice" },
+        { id: "audio.input", formats: [pcm] },
+        { id: "audio.output", formats: [pcm] },
+      ],
+      negotiatedCapabilities: [
+        { id: "realtime.voice" },
+        { id: "audio.input", format: pcm },
+        { id: "audio.output", format: pcm },
+      ],
+    });
+    const output = JSON.stringify(diagnostic.mock.calls);
+    for (const forbidden of [
+      "authorization", "private-token", "userId", "private-user", "deviceId", "device-1",
+      "transportSessionId", "client-session", "ownerConnectionId", "connection-1",
+      "transcript", "private transcript",
+    ]) expect(output).not.toContain(forbidden);
+  });
+
   it("rejects an outbound TTS frame outside the negotiated audio format", async () => {
     const { socket, admission } = createHarness({ serverCapabilities: voiceCapabilities });
     await socket.receive(JSON.stringify(hello({

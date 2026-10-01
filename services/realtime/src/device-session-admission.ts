@@ -1,8 +1,11 @@
 import type { AudioPipeline } from "../../../runtimes/realtime-device/src/audio-pipeline";
 import type {
+  AcceptedDeviceSessionV2,
   AuthorizedDeviceIdentity,
   AudioFormat,
+  DeviceCapabilityId,
   DeviceCapabilityOffer,
+  DeviceSessionHelloV2,
   DeviceSessionRejectionReason,
   RejectedDeviceSessionV2,
   TrustedPrincipal,
@@ -23,6 +26,42 @@ export interface DeviceSessionAdmissionOptions {
   createTransportSessionId?: () => string;
   createConnectionId?: () => string;
   createConversationId?: () => string;
+  onCapabilityNegotiationDiagnostic?: (diagnostic: DeviceSessionCapabilityDiagnostic) => void;
+}
+
+export interface DeviceSessionCapabilityDiagnostic {
+  readonly clientAvailableCapabilities: readonly CapabilityOfferDiagnostic[];
+  readonly negotiatedCapabilities: readonly NegotiatedCapabilityDiagnostic[];
+}
+
+type AudioFormatDiagnostic = Readonly<Pick<AudioFormat, "codec" | "sampleRateHz" | "channels">>;
+type CapabilityOfferDiagnostic = Readonly<{
+  id: DeviceCapabilityId;
+  formats?: readonly AudioFormatDiagnostic[];
+}>;
+type NegotiatedCapabilityDiagnostic = Readonly<{
+  id: DeviceCapabilityId;
+  format?: AudioFormatDiagnostic;
+}>;
+
+function audioFormatDiagnostic(format: AudioFormat): AudioFormatDiagnostic {
+  return { codec: format.codec, sampleRateHz: format.sampleRateHz, channels: format.channels };
+}
+
+export function createDeviceSessionCapabilityDiagnostic(
+  hello: DeviceSessionHelloV2,
+  accepted: AcceptedDeviceSessionV2,
+): DeviceSessionCapabilityDiagnostic {
+  return {
+    clientAvailableCapabilities: hello.availableCapabilities.map((capability) =>
+      "formats" in capability
+        ? { id: capability.id, formats: capability.formats.map(audioFormatDiagnostic) }
+        : { id: capability.id }),
+    negotiatedCapabilities: accepted.negotiatedCapabilities.map((capability) =>
+      "format" in capability
+        ? { id: capability.id, format: audioFormatDiagnostic(capability.format) }
+        : { id: capability.id }),
+  };
 }
 
 export class DeviceSessionAdmission implements RealtimeSessionConnection {
@@ -178,6 +217,13 @@ export class DeviceSessionAdmission implements RealtimeSessionConnection {
       return;
     }
     this.accepted = true;
+    try {
+      this.options.onCapabilityNegotiationDiagnostic?.(
+        createDeviceSessionCapabilityDiagnostic(value as DeviceSessionHelloV2, decision),
+      );
+    } catch {
+      // Diagnostics must never alter admission behavior.
+    }
     const negotiated = decision.negotiatedCapabilities;
     const input = negotiated.find((capability) => capability.id === "audio.input");
     const output = negotiated.find((capability) => capability.id === "audio.output");
