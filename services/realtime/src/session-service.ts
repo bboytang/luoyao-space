@@ -58,6 +58,7 @@ export class RealtimeSessionService {
   private controller?: AbortController;
   private pipelinePromise?: Promise<void>;
   private ttsMessageId?: string;
+  private bargeInQueueHandoff?: AudioFrameQueue;
   private closed = false;
 
   constructor(
@@ -173,11 +174,16 @@ export class RealtimeSessionService {
     const pipelinePromise = this.pipelinePromise;
     if (!queue || !controller || !pipelinePromise) return;
 
+    this.bargeInQueueHandoff = queue;
     controller.abort();
     await pipelinePromise;
 
-    if (this.closed || this.queue !== queue) return;
+    if (this.closed || this.queue !== queue) {
+      this.bargeInQueueHandoff = undefined;
+      return;
+    }
 
+    this.bargeInQueueHandoff = undefined;
     const nextController = new AbortController();
     this.controller = nextController;
     const nextPipelinePromise = this.runPipeline(queue, nextController);
@@ -240,7 +246,9 @@ export class RealtimeSessionService {
         true,
       );
     } finally {
-      if (!preserveQueueOnFinish && this.queue === queue) this.queue = undefined;
+      const preserveQueue =
+        preserveQueueOnFinish || this.bargeInQueueHandoff === queue;
+      if (!preserveQueue && this.queue === queue) this.queue = undefined;
       if (this.controller === controller) this.controller = undefined;
       this.ttsMessageId = undefined;
     }
