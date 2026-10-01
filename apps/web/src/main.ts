@@ -73,9 +73,20 @@ listenButton.textContent = "开始说话";
 listenButton.disabled = true;
 const stopButton = document.createElement("button");
 stopButton.type = "button";
-stopButton.textContent = "停止";
+stopButton.textContent = "停止监听";
 stopButton.disabled = true;
-realtimePanel.append(realtimeUrl, connectButton, listenButton, stopButton, realtimeStatus);
+const abortButton = document.createElement("button");
+abortButton.type = "button";
+abortButton.textContent = "打断回答";
+abortButton.disabled = true;
+realtimePanel.append(
+  realtimeUrl,
+  connectButton,
+  listenButton,
+  stopButton,
+  abortButton,
+  realtimeStatus,
+);
 
 function setRealtimeUiState(state: "connecting" | "connected" | "closed"): void {
   if (state === "connecting") {
@@ -83,6 +94,7 @@ function setRealtimeUiState(state: "connecting" | "connected" | "closed"): void 
     connectButton.disabled = true;
     listenButton.disabled = true;
     stopButton.disabled = true;
+    abortButton.disabled = true;
     realtimeStatus.textContent = "连接中…";
     return;
   }
@@ -92,6 +104,7 @@ function setRealtimeUiState(state: "connecting" | "connected" | "closed"): void 
     connectButton.disabled = false;
     listenButton.disabled = false;
     stopButton.disabled = true;
+    abortButton.disabled = false;
     realtimeStatus.textContent = "已连接";
     return;
   }
@@ -100,6 +113,7 @@ function setRealtimeUiState(state: "connecting" | "connected" | "closed"): void 
   connectButton.disabled = false;
   listenButton.disabled = true;
   stopButton.disabled = true;
+  abortButton.disabled = true;
   realtimeStatus.textContent = "未连接";
 }
 
@@ -143,6 +157,7 @@ listenButton.addEventListener("click", async () => {
     await realtimeClient.startListening();
     listenButton.disabled = true;
     stopButton.disabled = false;
+    abortButton.disabled = false;
     realtimeStatus.textContent = "正在倾听";
   } catch (error) {
     realtimeStatus.textContent = error instanceof Error ? error.message : "麦克风启动失败";
@@ -154,7 +169,20 @@ stopButton.addEventListener("click", async () => {
   await realtimeClient.stopListening();
   listenButton.disabled = false;
   stopButton.disabled = true;
+  abortButton.disabled = false;
   realtimeStatus.textContent = "已停止";
+});
+
+abortButton.addEventListener("click", async () => {
+  if (!realtimeClient) return;
+  abortButton.disabled = true;
+  try {
+    await realtimeClient.abort();
+    realtimeStatus.textContent = "已打断";
+  } catch (error) {
+    abortButton.disabled = false;
+    realtimeStatus.textContent = error instanceof Error ? error.message : "打断失败";
+  }
 });
 
 const title = document.createElement("h1");
