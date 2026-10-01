@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
+import { runMigrations } from "../../../database/migrations/runner";
 import { EMBEDDING_DIMENSION, EmbeddingError } from "./embedding";
 import { PostgresMemoryRepository, type SqlClient } from "./postgres-repository";
 
@@ -117,10 +117,7 @@ describe("PostgresMemoryRepository with PostgreSQL", () => {
     try {
       await client.query(`CREATE SCHEMA "${schema}"`);
       await client.query(`SET search_path TO "${schema}", public`);
-      for (const migration of ["001_create_memories.sql", "005_add_memory_project_scope.sql"]) {
-        const sql = await readFile(new URL(`../../../database/migrations/${migration}`, import.meta.url), "utf8");
-        await client.query(sql);
-      }
+      await runMigrations(client);
 
       const repository = new PostgresMemoryRepository(client);
       const userId = randomUUID();

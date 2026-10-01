@@ -33,6 +33,15 @@ jobs:
           node-version: 22
       - run: pnpm install --frozen-lockfile=false
       - run: test -n "$DATABASE_URL"
+      - name: Apply migrations and verify no-op rerun
+        run: |
+          first="$(pnpm db:migrate)"
+          echo "$first"
+          applied="$(printf '%s\n' "$first" | sed -nE 's/^Migrations: ([1-9][0-9]*) applied, 0 skipped$/\1/p')"
+          test -n "$applied"
+          second="$(pnpm db:migrate)"
+          echo "$second"
+          printf '%s\n' "$second" | grep -Fx "Migrations: 0 applied, $applied skipped"
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
