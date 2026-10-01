@@ -44,6 +44,7 @@ export type RealtimeServerMessage =
   | TtsStartMessage
   | TtsSentenceMessage
   | TtsStopMessage
+  | BargeInReadyMessage
   | ErrorMessage
   | PongMessage;
 
@@ -78,6 +79,11 @@ export interface TtsStopMessage {
   type: "tts";
   state: "stop";
   messageId: string;
+}
+
+export interface BargeInReadyMessage {
+  type: "barge_in";
+  state: "ready";
 }
 
 export interface ErrorMessage {
