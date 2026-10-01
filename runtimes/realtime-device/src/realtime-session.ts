@@ -41,6 +41,7 @@ export class RealtimeSession {
   private closed = false;
   private closePromise?: Promise<void>;
   private abortPromise?: Promise<void>;
+  private interruptPromise?: Promise<void>;
   private connectPromise?: Promise<void>;
   private startListeningPromise?: Promise<void>;
   private stopListeningPromise?: Promise<void>;
@@ -173,6 +174,35 @@ export class RealtimeSession {
       await this.stopListeningPromise;
     } finally {
       this.stopListeningPromise = undefined;
+    }
+  }
+
+  async interruptResponse(): Promise<void> {
+    if (this.closed) return;
+    if (this.abortPromise) {
+      await this.abortPromise.catch(() => {});
+      return;
+    }
+    if (this.interruptPromise) {
+      await this.interruptPromise;
+      return;
+    }
+
+    this.interruptPromise = (async () => {
+      await this.startListeningPromise;
+      if (this.closed) return;
+
+      await this.output.stop();
+      this.avatar.handleAborted();
+
+      if (this.closed) return;
+      await this.transport.send({ type: "abort", reason: "barge_in" });
+    })();
+
+    try {
+      await this.interruptPromise;
+    } finally {
+      this.interruptPromise = undefined;
     }
   }
 
