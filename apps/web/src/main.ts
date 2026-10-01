@@ -5,6 +5,9 @@ import { RealtimeClient } from "./realtime-client";
 import { AvatarLipSyncDriver } from "./avatar-lip-sync";
 import { AvatarRenderLoop } from "./avatar-render-loop";
 import { AppLifecycle } from "./app-lifecycle";
+import { PcmVoiceActivityDetector } from "../../../runtimes/realtime-device/src/voice-activity";
+import { RealtimeBargeInController } from "./realtime-barge-in";
+import { RealtimeBargeInInput } from "./realtime-barge-in-input";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Luoyao Space app root is missing");
@@ -64,6 +67,24 @@ realtimeUrl.placeholder = "wss://你的实时服务地址";
 realtimeUrl.setAttribute("aria-label", "Realtime WebSocket 地址");
 const realtimeStatus = document.createElement("span");
 realtimeStatus.textContent = "未连接";
+
+const bargeInDetector = new PcmVoiceActivityDetector();
+const bargeInController = new RealtimeBargeInController(
+  bargeInDetector,
+  {
+    isResponseActive: () => runtime.getState().speaking,
+    interruptResponse: async () => {
+      await realtimeClient?.interruptResponse();
+    },
+  },
+  {
+    onInterruptError: (error) => {
+      realtimeStatus.textContent =
+        error instanceof Error ? error.message : "自动打断失败";
+    },
+  },
+);
+const realtimeInput = new RealtimeBargeInInput(capture, bargeInController);
 const connectButton = document.createElement("button");
 connectButton.type = "button";
 connectButton.textContent = "连接实时服务";
@@ -136,7 +157,7 @@ connectButton.addEventListener("click", async () => {
     realtimeClient = new RealtimeClient({
       url,
       avatar: runtime,
-      input: capture,
+      input: realtimeInput,
       output: playback,
       onStateChange: (state) => {
         setRealtimeUiState(state);
@@ -177,7 +198,7 @@ abortButton.addEventListener("click", async () => {
   if (!realtimeClient) return;
   abortButton.disabled = true;
   try {
-    await realtimeClient.abort();
+    await realtimeClient.interruptResponse();
     realtimeStatus.textContent = "已打断";
   } catch (error) {
     abortButton.disabled = false;
