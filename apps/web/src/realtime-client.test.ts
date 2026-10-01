@@ -126,6 +126,23 @@ describe("RealtimeClient", () => {
     );
   });
 
+  it("interrupts the response without stopping microphone capture", async () => {
+    const { client, socket, input, output } = createClient();
+
+    await client.connect();
+    await client.startListening();
+    await client.interruptResponse();
+
+    expect(input.stop).not.toHaveBeenCalled();
+    expect(output.stop).toHaveBeenCalledTimes(1);
+    expect(socket.send).toHaveBeenCalledWith(
+      expect.stringContaining('"type":"abort"'),
+    );
+    expect(socket.send).toHaveBeenCalledWith(
+      expect.stringContaining('"reason":"barge_in"'),
+    );
+  });
+
   it("makes close idempotent and rejects lifecycle operations afterwards", async () => {
     const { client, socket, input, output } = createClient();
 
