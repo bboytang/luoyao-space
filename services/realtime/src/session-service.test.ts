@@ -208,7 +208,7 @@ describe("RealtimeSessionService", () => {
 
     expect(firstRunStopped).toBe(true);
 
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
     await connection.control({ type: "listen", mode: "stop" });
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
