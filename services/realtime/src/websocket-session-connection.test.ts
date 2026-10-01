@@ -70,7 +70,9 @@ describe("WebSocketSessionConnection", () => {
     const connection = new WebSocketSessionConnection(socket);
     let releaseFirst!: () => void;
     let firstStarted!: () => void;
+    let resolvePingSeen!: () => void;
     const firstStartedPromise = new Promise<void>((resolve) => { firstStarted = resolve; });
+    const pingSeen = new Promise<void>((resolve) => { resolvePingSeen = resolve; });
     const seen: string[] = [];
 
     connection.onControl(async (message) => {
@@ -78,6 +80,8 @@ describe("WebSocketSessionConnection", () => {
       if (message.type === "hello") {
         firstStarted();
         await new Promise<void>((resolve) => { releaseFirst = resolve; });
+      } else if (message.type === "ping") {
+        resolvePingSeen();
       }
     });
 
@@ -97,6 +101,7 @@ describe("WebSocketSessionConnection", () => {
     expect(seen).toEqual(["hello"]);
 
     releaseFirst();
+    await pingSeen;
     await Promise.all([first, second]);
 
     expect(seen).toEqual(["hello", "ping"]);
