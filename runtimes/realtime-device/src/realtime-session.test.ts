@@ -230,6 +230,47 @@ describe("RealtimeSession", () => {
     expect(settled).toBe(true);
   });
 
+  it("holds input audio until barge-in handoff is acknowledged", async () => {
+    const { session, input, transport } = createSession();
+    let onFrame!: (frame: Parameters<RealtimeTransport["onAudio"]>[0] extends (frame: infer F) => unknown ? F : never);
+    input.start.mockImplementationOnce(async (handler) => {
+      onFrame = handler;
+    });
+
+    await session.startListening();
+
+    let settled = false;
+    const interrupt = session.interruptResponse().finally(() => {
+      settled = true;
+    });
+
+    await vi.waitFor(() => {
+      expect(transport.send).toHaveBeenNthCalledWith(2, {
+        type: "abort",
+        reason: "barge_in",
+      });
+    });
+
+    const frame = {
+      kind: "audio" as const,
+      codec: "pcm_s16le" as const,
+      sampleRate: 24_000,
+      channels: 1,
+      sequence: 7,
+      payload: new Uint8Array([0, 0]),
+    };
+    onFrame(frame);
+
+    await Promise.resolve();
+    expect(transport.sendAudio).not.toHaveBeenCalled();
+    expect(settled).toBe(false);
+
+    transport.receiveMessage({ type: "barge_in", state: "ready" });
+    await interrupt;
+
+    expect(transport.sendAudio).toHaveBeenCalledWith(frame);
+  });
+
   it("waits for an in-flight listening start before aborting", async () => {
     const { session, input, transport, output, avatar } = createSession();
     let releaseStart!: () => void;
