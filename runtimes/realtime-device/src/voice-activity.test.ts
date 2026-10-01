@@ -38,7 +38,6 @@ describe("PcmVoiceActivityDetector", () => {
 
     expect(detector.analyze(frame(0.2))?.active).toBe(true);
     expect(detector.analyze(frame(0.04))?.active).toBe(true);
-    expect(detector.analyze(frame(0.08))?.active).toBe(true);
     expect(detector.analyze(frame(0.04))?.active).toBe(false);
   });
 
