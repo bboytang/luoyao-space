@@ -226,6 +226,52 @@ describe("RealtimeSessionService", () => {
     });
   });
 
+  it("routes frames arriving after barge-in handoff to the new pipeline", async () => {
+    const consumedSequences: number[] = [];
+    let releaseFirst!: () => void;
+    let resolveFirstReady!: () => void;
+    const firstReady = new Promise<void>((resolve) => {
+      resolveFirstReady = resolve;
+    });
+
+    const handoffPipeline: AudioPipeline = {
+      ...pipeline,
+      asr: {
+        async *transcribe(frames, context) {
+          for await (const current of frames) {
+            consumedSequences.push(current.sequence);
+            if (current.sequence === 0) {
+              resolveFirstReady();
+              await new Promise<void>((resolve) => {
+                releaseFirst = resolve;
+              });
+              return;
+            }
+            yield { type: "final", text: "new generation" as const };
+            return;
+          }
+        },
+      },
+    };
+
+    const connection = new FakeConnection();
+    new RealtimeSessionService(connection, handoffPipeline);
+
+    await connection.control({ type: "hello", version: 1, sessionId: "session-generation" });
+    await connection.control({ type: "listen", mode: "start" });
+    await connection.pushAudio(frame);
+    await firstReady;
+
+    const bargeIn = connection.control({ type: "abort", reason: "barge_in" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await connection.pushAudio({ ...frame, sequence: 1 });
+    releaseFirst();
+    await bargeIn;
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
+    expect(consumedSequences).toEqual([0, 1]);
+  });
+
   it("waits for an aborted pipeline before accepting a new listen session", async () => {
     let runs = 0;
     let firstRunStopped = false;
