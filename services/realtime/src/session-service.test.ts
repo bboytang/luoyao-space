@@ -265,8 +265,18 @@ describe("RealtimeSessionService", () => {
     const bargeIn = connection.control({ type: "abort", reason: "barge_in" });
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     await connection.pushAudio({ ...frame, sequence: 1 });
+    expect(connection.messages).not.toContainEqual({
+      type: "barge_in",
+      state: "ready",
+    });
+
     releaseFirst();
     await bargeIn;
+
+    expect(connection.messages).toContainEqual({
+      type: "barge_in",
+      state: "ready",
+    });
 
     await new Promise<void>((resolve) => setTimeout(resolve, 5));
     expect(consumedSequences).toEqual([0, 1]);
