@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { AudioFrame } from "../../../runtimes/realtime-device/src/protocol";
 import type { ServerWebSocketLike } from "./websocket-session-connection";
 import { WebSocketSessionConnection } from "./websocket-session-connection";
@@ -68,12 +68,16 @@ describe("WebSocketSessionConnection", () => {
     const socket = new FakeSocket();
     const connection = new WebSocketSessionConnection(socket);
     let releaseFirst!: () => void;
+    let resolvePingSeen!: () => void;
+    const pingSeen = new Promise<void>((resolve) => { resolvePingSeen = resolve; });
     const seen: string[] = [];
 
     connection.onControl(async (message) => {
       seen.push(message.type);
       if (message.type === "hello") {
         await new Promise<void>((resolve) => { releaseFirst = resolve; });
+      } else if (message.type === "ping") {
+        resolvePingSeen();
       }
     });
 
@@ -86,15 +90,17 @@ describe("WebSocketSessionConnection", () => {
 
     const second = socket.receive(JSON.stringify({
       type: "ping",
-      timestamp: 1,
+      timestamp: "2026-01-01T00:00:00.000Z",
     }));
 
     await Promise.resolve();
     expect(seen).toEqual(["hello"]);
 
     releaseFirst();
+    await pingSeen;
     await Promise.all([first, second]);
-    await vi.waitFor(() => expect(seen).toEqual(["hello", "ping"]));
+
+    expect(seen).toEqual(["hello", "ping"]);
   });
 
   it("encodes server control and audio messages", async () => {
