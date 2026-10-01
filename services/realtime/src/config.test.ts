@@ -8,6 +8,7 @@ describe("loadRealtimeConfig", () => {
       port: 8787,
       providers: { vad: "demo", asr: "demo", llm: "demo", tts: "demo" },
       openai: undefined,
+      development: { enabled: false, legacyV1: false, identity: undefined },
     });
   });
 
@@ -27,6 +28,7 @@ describe("loadRealtimeConfig", () => {
       port: 9000,
       providers: { vad: "demo", asr: "cloud_asr", llm: "cloud_llm", tts: "cloud_tts" },
       openai: undefined,
+      development: { enabled: false, legacyV1: false, identity: undefined },
     });
   });
 
@@ -47,6 +49,7 @@ describe("loadRealtimeConfig", () => {
         model: "test-model",
         baseUrl: "https://example.test/v1",
       },
+      development: { enabled: false, legacyV1: false, identity: undefined },
     });
   });
 
@@ -65,5 +68,23 @@ describe("loadRealtimeConfig", () => {
 
   it("rejects invalid provider names", () => {
     expect(() => loadRealtimeConfig({ REALTIME_LLM_PROVIDER: "bad provider" })).toThrow();
+  });
+
+  it("requires explicit, local, non-production development mode for v1 compatibility", () => {
+    expect(() => loadRealtimeConfig({ REALTIME_DEV_V1_COMPAT: "1" })).toThrow(/development mode/i);
+    expect(() => loadRealtimeConfig({ REALTIME_DEV_MODE: "1", REALTIME_HOST: "0.0.0.0" })).toThrow(/loopback/i);
+    expect(() => loadRealtimeConfig({ REALTIME_DEV_MODE: "1", NODE_ENV: "production" })).toThrow(/production/i);
+    expect(loadRealtimeConfig({ REALTIME_DEV_MODE: "1", REALTIME_DEV_V1_COMPAT: "1" }).development).toEqual({
+      enabled: true, legacyV1: true, identity: undefined,
+    });
+  });
+
+  it("creates a development identity only from explicit configured user and device IDs", () => {
+    expect(() => loadRealtimeConfig({ REALTIME_DEV_MODE: "1", REALTIME_DEV_USER_ID: "user-1" })).toThrow(/both/i);
+    expect(loadRealtimeConfig({
+      REALTIME_DEV_MODE: "1", REALTIME_DEV_USER_ID: "user-1", REALTIME_DEV_DEVICE_ID: "device-1",
+    }).development).toEqual({
+      enabled: true, legacyV1: false, identity: { userId: "user-1", deviceId: "device-1" },
+    });
   });
 });

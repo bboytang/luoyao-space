@@ -1,6 +1,6 @@
 import { WebSocketServer, type WebSocket } from "ws";
-import { RealtimeSessionService } from "./session-service";
-import { WebSocketSessionConnection } from "./websocket-session-connection";
+import { InMemoryDeviceSessionOwnership } from "../../device-runtime/src/session-boundary";
+import { attachRealtimeConnection } from "./connection-factory";
 import { createRealtimePipeline, createDefaultRealtimeProviderFactories } from "./provider-registry";
 import { loadRealtimeConfig } from "./config";
 
@@ -19,12 +19,12 @@ const pipelineConfig = {
   tts: { provider: config.providers.tts },
 };
 const pipeline = createRealtimePipeline(pipelineConfig, factories);
+const ownership = new InMemoryDeviceSessionOwnership();
 
 const server = new WebSocketServer({ host, port });
 
-server.on("connection", (socket: WebSocket) => {
-  const connection = new WebSocketSessionConnection(socket);
-  new RealtimeSessionService(connection, pipeline);
+server.on("connection", (socket: WebSocket, request) => {
+  attachRealtimeConnection(socket, request, pipeline, config, ownership);
 });
 
 server.on("listening", () => {

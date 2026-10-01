@@ -13,6 +13,7 @@ export interface RealtimeSessionConnection {
 export interface RealtimeSessionServiceOptions {
   now?: () => string;
   createMessageId?: () => string;
+  admittedSessionId?: string;
 }
 
 class AudioFrameQueue implements AsyncIterable<AudioFrame> {
@@ -106,6 +107,10 @@ export class RealtimeSessionService {
   ) {
     this.now = options.now ?? (() => new Date().toISOString());
     this.createMessageId = options.createMessageId ?? (() => crypto.randomUUID());
+    if (options.admittedSessionId) {
+      this.sessionId = options.admittedSessionId;
+      this.conversationId = options.admittedSessionId;
+    }
     this.unsubscribeControl = connection.onControl((message) => this.handleControl(message));
     this.unsubscribeAudio = connection.onAudio((frame) => this.handleAudio(frame));
     this.unsubscribeClose = connection.onClose(() => this.dispose());

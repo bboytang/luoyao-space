@@ -12,6 +12,17 @@ export interface RealtimeConfig {
     readonly model: string;
     readonly baseUrl?: string;
   };
+  readonly development: {
+    readonly enabled: boolean;
+    readonly legacyV1: boolean;
+    readonly identity?: { readonly userId: string; readonly deviceId: string };
+  };
+}
+
+function readOptIn(name: string, value: string | undefined): boolean {
+  if (value === undefined) return false;
+  if (value === "1") return true;
+  throw new Error(`${name} must be 1 when explicitly enabled`);
 }
 
 function readPort(value: string | undefined): number {
@@ -41,13 +52,31 @@ export function loadRealtimeConfig(
   const llm = readProvider("REALTIME_LLM_PROVIDER", env.REALTIME_LLM_PROVIDER);
   const apiKey = readOptionalString(env.OPENAI_API_KEY);
   const model = readOptionalString(env.OPENAI_MODEL);
+  const host = env.REALTIME_HOST?.trim() || "127.0.0.1";
+  const developmentEnabled = readOptIn("REALTIME_DEV_MODE", env.REALTIME_DEV_MODE);
+  const legacyV1 = readOptIn("REALTIME_DEV_V1_COMPAT", env.REALTIME_DEV_V1_COMPAT);
+  const devUserId = readOptionalString(env.REALTIME_DEV_USER_ID);
+  const devDeviceId = readOptionalString(env.REALTIME_DEV_DEVICE_ID);
+
+  if (legacyV1 && !developmentEnabled) throw new Error("v1 compatibility requires explicit development mode");
+  if (!developmentEnabled && (env.REALTIME_DEV_USER_ID !== undefined || env.REALTIME_DEV_DEVICE_ID !== undefined)) {
+    throw new Error("Development identity requires explicit development mode");
+  }
+  if (developmentEnabled) {
+    if (env.NODE_ENV === "production") throw new Error("Development mode is forbidden in production");
+    if (host !== "127.0.0.1" && host !== "::1") throw new Error("Development mode requires a loopback host");
+    if ((env.REALTIME_DEV_USER_ID !== undefined || env.REALTIME_DEV_DEVICE_ID !== undefined) &&
+        (!devUserId || !devDeviceId)) {
+      throw new Error("Development identity requires both user and device IDs");
+    }
+  }
 
   if (llm === "openai" && (!apiKey || !model)) {
     throw new Error("OPENAI_API_KEY and OPENAI_MODEL are required when REALTIME_LLM_PROVIDER=openai");
   }
 
   return {
-    host: env.REALTIME_HOST?.trim() || "127.0.0.1",
+    host,
     port: readPort(env.REALTIME_PORT),
     providers: {
       vad: readProvider("REALTIME_VAD_PROVIDER", env.REALTIME_VAD_PROVIDER),
@@ -62,5 +91,10 @@ export function loadRealtimeConfig(
           baseUrl: readOptionalString(env.OPENAI_BASE_URL),
         }
       : undefined,
+    development: {
+      enabled: developmentEnabled,
+      legacyV1,
+      identity: devUserId && devDeviceId ? { userId: devUserId, deviceId: devDeviceId } : undefined,
+    },
   };
 }
