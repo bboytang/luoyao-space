@@ -16,29 +16,43 @@ export interface RealtimeSessionServiceOptions {
 }
 
 class AudioFrameQueue implements AsyncIterable<AudioFrame> {
-  private readonly frames: AudioFrame[] = [];
-  private readonly waiters: Array<(result: IteratorResult<AudioFrame>) => void> = [];
+  private readonly frames: Array<{ generation: number; frame: AudioFrame }> = [];
+  private readonly waiters: Array<{
+    generation: number;
+    resolve: (result: IteratorResult<AudioFrame>) => void;
+  }> = [];
   private generation = 0;
   private ended = false;
 
   push(frame: AudioFrame): void {
     if (this.ended) return;
-    const waiter = this.waiters.shift();
-    if (waiter) waiter({ value: frame, done: false });
-    else this.frames.push(frame);
+    const generation = this.generation;
+    const waiterIndex = this.waiters.findIndex((waiter) => waiter.generation === generation);
+    if (waiterIndex >= 0) {
+      const [waiter] = this.waiters.splice(waiterIndex, 1);
+      waiter.resolve({ value: frame, done: false });
+      return;
+    }
+    this.frames.push({ generation, frame });
   }
 
   end(): void {
     if (this.ended) return;
     this.ended = true;
-    while (this.waiters.length) this.waiters.shift()?.({ value: undefined, done: true });
+    while (this.waiters.length) this.waiters.shift()?.resolve({ value: undefined, done: true });
   }
 
   handoff(): void {
     if (this.ended) return;
     this.generation += 1;
-    this.frames.length = 0;
-    while (this.waiters.length) this.waiters.shift()?.({ value: undefined, done: true });
+    while (this.frames.length && this.frames[0].generation !== this.generation) {
+      this.frames.shift();
+    }
+    for (let i = this.waiters.length - 1; i >= 0; i -= 1) {
+      if (this.waiters[i].generation !== this.generation) {
+        this.waiters.splice(i, 1)[0]?.resolve({ value: undefined, done: true });
+      }
+    }
   }
 
   reader(): AsyncIterable<AudioFrame> {
@@ -59,10 +73,13 @@ class AudioFrameQueue implements AsyncIterable<AudioFrame> {
       return Promise.resolve({ value: undefined, done: true });
     }
 
-    const frame = this.frames.shift();
-    if (frame) return Promise.resolve({ value: frame, done: false });
+    const frameIndex = this.frames.findIndex((entry) => entry.generation === generation);
+    if (frameIndex >= 0) {
+      const [entry] = this.frames.splice(frameIndex, 1);
+      return Promise.resolve({ value: entry.frame, done: false });
+    }
     if (this.ended) return Promise.resolve({ value: undefined, done: true });
-    return new Promise((resolve) => this.waiters.push(resolve));
+    return new Promise((resolve) => this.waiters.push({ generation, resolve }));
   }
 }
 
