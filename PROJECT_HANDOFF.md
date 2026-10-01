@@ -46,10 +46,12 @@ For every implementation task:
 4. Do not opportunistically refactor unrelated modules.
 5. Do not change product direction or architecture unless explicitly authorized by the task.
 6. Prefer targeted tests during implementation.
-7. Before a commit candidate, run the repository-required full local gates.
-8. Do not commit or push unless explicitly authorized.
+7. Before committing or pushing, pass the task-required targeted validation and repository-required full local gates, confirm that all changes stay within the approved scope, and confirm that the escalation rule has not been triggered.
+8. Approval of an implementation task normally authorizes Codex to implement, validate, commit, and push within that task's scope. An explicit `read-only`, `no commit`, or `no push` restriction overrides this default authorization.
 9. Stop after completing the requested scope; do not automatically begin the next milestone.
 10. If unexpected architecture, security, data-integrity, compatibility, or scope issues appear, stop expansion, report them, and request a decision instead of silently widening the task.
+
+Each approved implementation task should normally produce one logical commit, not a push after every small edit. Check the corresponding CI after pushing. If CI fails and the cause and fix are clearly within the original approved scope, fix it, repeat the required validation, commit, and push again. If a fix would expand scope or trigger the architecture, shared-protocol, database, security, platform, or other escalation conditions, stop and request a decision.
 
 ### 5. Tool/plugin usage
 
@@ -69,7 +71,7 @@ approved task -> inspect relevant code -> implement -> targeted validation
   -> full local gates -> review -> one logical commit -> push -> CI final verification
 ```
 
-Commit and push only when authorized. Do not push after every tiny edit merely to use CI as a local debugger. Diagnose and fix CI failures before continuing unrelated development.
+For an approved implementation task, its approval supplies commit/push authorization within scope unless explicitly restricted; apply the validation and escalation checks above. Do not push after every tiny edit merely to use CI as a local debugger. Diagnose and fix CI failures before continuing unrelated development.
 
 ### 7. Standard Codex handoff format
 
@@ -843,7 +845,7 @@ Before making changes:
 6. State what the next significant step is for before doing it.
 7. Make small, coherent changes.
 8. Add regression tests for behavioral fixes.
-9. Commit logically.
+9. Commit logically when authorized under the Development Execution Protocol.
 10. Verify CI before moving to the next batch.
 11. Never silently change the platform priority or architectural center.
 12. Never turn Web into the product center because it is easier to implement.
