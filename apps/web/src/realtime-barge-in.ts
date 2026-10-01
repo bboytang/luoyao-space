@@ -39,15 +39,16 @@ export class RealtimeBargeInController {
     if (!risingEdge || !this.target.isResponseActive() || this.interruptPromise) return;
 
     const operation = this.target.interruptResponse();
-    this.interruptPromise = operation
+    const trackedOperation = operation
       .catch((error) => {
         this.options.onInterruptError?.(error);
       })
       .finally(() => {
-        if (this.interruptPromise === operation) {
+        if (this.interruptPromise === trackedOperation) {
           this.interruptPromise = undefined;
         }
       });
+    this.interruptPromise = trackedOperation;
   }
 
   reset(): void {
