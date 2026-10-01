@@ -65,16 +65,16 @@ describe("RealtimeAvatarController", () => {
     expect(getSpeaking()).toBe(false);
 
     controller.handleServerMessage({ type: "tts", state: "start", messageId: "m2" });
-    controller.handleServerMessage({ type: "tts", state: "start", messageId: "m1" });
     controller.handleAudioFrame();
 
     expect(getSpeaking()).toBe(true);
   });
 
-  it("marks the avatar as speaking when audio arrives", () => {
+  it("marks the avatar as speaking when audio arrives during an active tts turn", () => {
     const { avatar, getSpeaking } = createAvatar();
     const controller = new RealtimeAvatarController(avatar);
 
+    controller.handleServerMessage({ type: "tts", state: "start", messageId: "m1" });
     controller.handleAudioFrame();
 
     expect(getSpeaking()).toBe(true);
