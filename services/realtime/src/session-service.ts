@@ -1,6 +1,7 @@
 import type { AudioPipeline } from "../../../runtimes/realtime-device/src/audio-pipeline";
 import type { AudioFrame, RealtimeControlMessage, RealtimeServerMessage } from "../../../runtimes/realtime-device/src/protocol";
 import { runAudioPipeline } from "../../../runtimes/realtime-device/src/pipeline-runner";
+import { VoiceTurnDiagnosticRecorder, type VoiceTurnDiagnostic, type VoiceTurnOutcome } from "./voice-turn-diagnostic";
 
 export interface RealtimeSessionConnection {
   send(message: RealtimeServerMessage): Promise<void>;
@@ -15,6 +16,7 @@ export interface RealtimeSessionServiceOptions {
   createMessageId?: () => string;
   admittedSessionId?: string;
   trustedIdentity?: Readonly<{ userId: string; authorizedDeviceId: string }>;
+  onTurnDiagnostic?: (diagnostic: VoiceTurnDiagnostic) => void;
 }
 
 class AudioFrameQueue implements AsyncIterable<AudioFrame> {
@@ -89,6 +91,7 @@ export class RealtimeSessionService {
   private readonly now: () => string;
   private readonly createMessageId: () => string;
   private readonly trustedIdentity?: Readonly<{ userId: string; authorizedDeviceId: string }>;
+  private readonly onTurnDiagnostic?: (diagnostic: VoiceTurnDiagnostic) => void;
   private readonly unsubscribeControl: () => void;
   private readonly unsubscribeAudio: () => void;
   private readonly unsubscribeClose: () => void;
@@ -100,6 +103,7 @@ export class RealtimeSessionService {
   private pipelinePromise?: Promise<void>;
   private ttsMessageId?: string;
   private bargeInQueueHandoff?: AudioFrameQueue;
+  private turnDiagnostic?: VoiceTurnDiagnosticRecorder;
   private closed = false;
 
   constructor(
@@ -110,6 +114,7 @@ export class RealtimeSessionService {
     this.now = options.now ?? (() => new Date().toISOString());
     this.createMessageId = options.createMessageId ?? (() => crypto.randomUUID());
     this.trustedIdentity = options.trustedIdentity;
+    this.onTurnDiagnostic = options.onTurnDiagnostic;
     if (options.admittedSessionId) {
       this.sessionId = options.admittedSessionId;
       this.conversationId = options.admittedSessionId;
@@ -188,6 +193,7 @@ export class RealtimeSessionService {
       }
 
       this.conversationId = conversationId ?? this.sessionId;
+      this.turnDiagnostic = new VoiceTurnDiagnosticRecorder(this.onTurnDiagnostic);
       this.queue = new AudioFrameQueue();
       this.controller = new AbortController();
       this.ttsMessageId = undefined;
@@ -200,11 +206,13 @@ export class RealtimeSessionService {
       return;
     }
 
+    if (this.queue) this.turnDiagnostic?.stop();
     this.queue?.end();
   }
 
   private handleAudio(frame: AudioFrame): void {
     if (this.closed || !this.sessionId) return;
+    if (this.queue) this.turnDiagnostic?.input(frame);
     this.queue?.push(frame);
   }
 
@@ -222,6 +230,7 @@ export class RealtimeSessionService {
 
     this.bargeInQueueHandoff = queue;
     queue.handoff();
+    this.turnDiagnostic = new VoiceTurnDiagnosticRecorder(this.onTurnDiagnostic);
     controller.abort();
     await pipelinePromise;
 
@@ -250,6 +259,8 @@ export class RealtimeSessionService {
     const sessionId = this.sessionId;
     const conversationId = this.conversationId;
     if (!sessionId || !conversationId) return;
+    const diagnostic = this.turnDiagnostic;
+    let outcome: VoiceTurnOutcome | undefined;
 
     try {
       for await (const output of runAudioPipeline(this.pipeline, queue, {
@@ -257,6 +268,7 @@ export class RealtimeSessionService {
         conversationId,
         trustedIdentity: this.trustedIdentity,
         signal: controller.signal,
+        onStageDiagnostic: (event) => diagnostic?.pipeline(event),
       })) {
         if (output.type === "stt") {
           await this.connection.send({
@@ -277,20 +289,25 @@ export class RealtimeSessionService {
             });
           }
           await this.connection.sendAudio(output.frame);
+          diagnostic?.outputSent(output.frame);
           continue;
         }
 
         if (output.type === "error") {
+          outcome = "failed";
           await this.finishTts();
           await this.sendError("pipeline_error", "Realtime provider failed", true);
           continue;
         }
 
         if (output.type === "completed" || output.type === "aborted") {
+          outcome = output.type === "completed" ? "completed" : "cancelled";
           await this.finishTts();
         }
       }
     } catch (error) {
+      outcome = "failed";
+      diagnostic?.failedAt("output");
       await this.finishTts();
       await this.sendError(
         "pipeline_error",
@@ -298,6 +315,8 @@ export class RealtimeSessionService {
         true,
       );
     } finally {
+      diagnostic?.terminal(outcome ?? (controller.signal.aborted ? "cancelled" : "failed"));
+      if (this.turnDiagnostic === diagnostic) this.turnDiagnostic = undefined;
       const preserveQueue =
         preserveQueueOnFinish || this.bargeInQueueHandoff === queue;
       if (!preserveQueue && this.queue === queue) this.queue = undefined;

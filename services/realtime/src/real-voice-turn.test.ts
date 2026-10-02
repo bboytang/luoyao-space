@@ -6,6 +6,7 @@ import type { SqlClient } from "../../memory/src/postgres-repository";
 import { DeviceSessionAdmission } from "./device-session-admission";
 import { createRealVoicePipeline } from "./real-voice-assembly";
 import type { ServerWebSocketLike } from "./websocket-session-connection";
+import type { VoiceTurnDiagnostic } from "./voice-turn-diagnostic";
 
 class FakeSocket implements ServerWebSocketLike {
   readonly sent: Array<string | Uint8Array> = [];
@@ -33,6 +34,7 @@ const capabilities: DeviceCapabilityOffer[] = [
 describe("M2-B server voice turn", () => {
   it("routes admitted PCM through ASR, trusted Brain with memory isolation, TTS and valid non-silent PCM", async () => {
     const socket = new FakeSocket();
+    const diagnostics: VoiceTurnDiagnostic[] = [];
     const query = vi.fn(async () => ({ rows: [{ id: "00000000-0000-0000-0000-000000000001",
       user_id: "trusted-user", companion_id: "luoyao", kind: "fact", content: "PRIVATE_MEMORY_SENTINEL",
       importance: 0.9, relationship_relevance: 0, project_relevance: 0, project_id: null,
@@ -66,6 +68,7 @@ describe("M2-B server voice turn", () => {
       ownership: new InMemoryDeviceSessionOwnership(), serverCapabilities: capabilities,
       createTransportSessionId: () => "transport-1", createConnectionId: () => "connection-1",
       createConversationId: () => "conversation-1",
+      onVoiceTurnDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
     });
     await socket.receive(JSON.stringify({ type: "device.hello", protocolVersions: [2],
       device: { deviceId: "device-1", platform: "ios" }, userId: "forged-user",
@@ -89,5 +92,14 @@ describe("M2-B server voice turn", () => {
     expect(output).toMatchObject({ codec: "pcm_s16le", sampleRate: 24_000, channels: 1 });
     expect(Array.from(output.payload)).toEqual([1, 0, 2, 0]);
     expect(socket.controls()).toContainEqual({ type: "stt", text: transcript, final: true });
+    await vi.waitFor(() => expect(diagnostics.at(-1)?.stage).toBe("terminal"));
+    expect(diagnostics.at(-1)).toMatchObject({
+      inputFrames: 1, inputBytes: 2, listenStopReceived: true,
+      asrFinalEvents: 1, nonEmptyAsrFinal: true, asrProviderCompleted: true,
+      brainStarted: true, brainCompleted: true, ttsStarted: true,
+      firstTtsAudioProduced: true, firstTtsAudioSent: true,
+      outputFrames: 1, outputBytes: 4, ttsCompleted: true, outcome: "completed",
+    });
+    expect(JSON.stringify(diagnostics)).not.toMatch(/trusted-user|device-1|transport-1|connection-1|conversation-1|PRIVATE_MEMORY_SENTINEL|你好|洛瑶/);
   });
 });

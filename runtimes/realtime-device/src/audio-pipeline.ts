@@ -7,7 +7,17 @@ export interface AudioStreamContext {
   trustedIdentity?: Readonly<{ userId: string; authorizedDeviceId: string }>;
   signal: AbortSignal;
   onMetrics?: (metrics: Readonly<PipelineMetrics>) => void;
+  onStageDiagnostic?: (event: PipelineStageDiagnostic) => void;
 }
+
+/** Internal progress facts only; never carry provider payloads or user content. */
+export type PipelineStageDiagnostic =
+  | { readonly type: "asr_partial" }
+  | { readonly type: "asr_final"; readonly nonEmpty: boolean }
+  | { readonly type: "asr_completed" }
+  | { readonly type: "brain_started" | "brain_completed" }
+  | { readonly type: "tts_started" | "tts_first_audio_produced" | "tts_completed" }
+  | { readonly type: "failed"; readonly stage: "input" | "asr" | "brain" | "tts" };
 
 export interface VadProvider {
   detect(frame: AudioFrame, context: AudioStreamContext): Promise<VadResult>;

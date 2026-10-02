@@ -34,6 +34,9 @@ server.on("connection", (socket: WebSocket, request) => {
     onCapabilityNegotiationDiagnostic: (diagnostic) => {
       console.info("Device Session capability negotiation", diagnostic);
     },
+    onVoiceTurnDiagnostic: (diagnostic) => {
+      console.info("Realtime voice turn", diagnostic);
+    },
   });
 });
 

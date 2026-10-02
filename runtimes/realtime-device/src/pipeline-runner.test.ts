@@ -71,6 +71,26 @@ describe("runAudioPipeline", () => {
     expect(final?.totalResponseMs).toBeTypeOf("number");
   });
 
+  it("ignores throwing diagnostic callbacks without changing voice output", async () => {
+    const pipeline: AudioPipeline = {
+      vad: { detect: async () => ({ speech: true, startOfSpeech: true, endOfSpeech: true }) },
+      asr: { async *transcribe() { yield { type: "final", text: "PRIVATE_TRANSCRIPT" }; } },
+      llm: { async *stream() { yield { type: "sentence", text: "PRIVATE_RESPONSE" }; } },
+      tts: { async *synthesize() { yield { type: "audio", frame }; } },
+    };
+    let calls = 0;
+    const outputs: string[] = [];
+    for await (const output of runAudioPipeline(pipeline, (async function* () { yield frame; })(), {
+      sessionId: "PRIVATE_SESSION", conversationId: "PRIVATE_CONVERSATION",
+      signal: new AbortController().signal,
+      onStageDiagnostic: () => { calls += 1; throw new Error("logger failure"); },
+      onMetrics: () => { throw new Error("metrics failure"); },
+    })) outputs.push(output.type);
+
+    expect(calls).toBeGreaterThan(0);
+    expect(outputs).toEqual(["stt", "tts_audio", "completed"]);
+  });
+
   it("does not wait for a live input stream after abort", async () => {
     const controller = new AbortController();
 

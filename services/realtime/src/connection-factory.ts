@@ -9,6 +9,7 @@ import type { RealtimeConfig } from "./config";
 import { DeviceSessionAdmission, type DeviceSessionCapabilityDiagnostic } from "./device-session-admission";
 import { RealtimeSessionService } from "./session-service";
 import { WebSocketSessionConnection, type ServerWebSocketLike } from "./websocket-session-connection";
+import type { VoiceTurnDiagnostic } from "./voice-turn-diagnostic";
 
 const serverCapabilities: readonly DeviceCapabilityOffer[] = [
   { id: "realtime.voice" },
@@ -20,6 +21,7 @@ export interface RealtimeAdmissionProviders<ConnectionContext> {
   principalProvider?: TrustedPrincipalProvider<ConnectionContext>;
   deviceAuthorizer?: DeviceAuthorizationProvider;
   onCapabilityNegotiationDiagnostic?: (diagnostic: DeviceSessionCapabilityDiagnostic) => void;
+  onVoiceTurnDiagnostic?: (diagnostic: VoiceTurnDiagnostic) => void;
 }
 
 export function attachRealtimeConnection<ConnectionContext>(
@@ -52,5 +54,6 @@ export function attachRealtimeConnection<ConnectionContext>(
     ownership,
     serverCapabilities,
     onCapabilityNegotiationDiagnostic: providers.onCapabilityNegotiationDiagnostic,
+    onVoiceTurnDiagnostic: providers.onVoiceTurnDiagnostic,
   });
 }

@@ -17,6 +17,7 @@ import { binaryAudioCodec } from "../../../runtimes/realtime-device/src/binary-a
 import type { DeviceSessionOwnership } from "../../device-runtime/src/session-boundary";
 import type { ServerWebSocketLike } from "./websocket-session-connection";
 import { RealtimeSessionService, type RealtimeSessionConnection } from "./session-service";
+import type { VoiceTurnDiagnostic } from "./voice-turn-diagnostic";
 
 export interface DeviceSessionAdmissionOptions {
   resolvePrincipal?: () => Promise<TrustedPrincipal | null>;
@@ -27,6 +28,7 @@ export interface DeviceSessionAdmissionOptions {
   createConnectionId?: () => string;
   createConversationId?: () => string;
   onCapabilityNegotiationDiagnostic?: (diagnostic: DeviceSessionCapabilityDiagnostic) => void;
+  onVoiceTurnDiagnostic?: (diagnostic: VoiceTurnDiagnostic) => void;
 }
 
 export interface DeviceSessionCapabilityDiagnostic {
@@ -234,6 +236,7 @@ export class DeviceSessionAdmission implements RealtimeSessionConnection {
       new RealtimeSessionService(this, this.pipeline, {
         admittedSessionId: this.transportSessionId,
         trustedIdentity: { userId: principal.userId, authorizedDeviceId: authorizedDevice.deviceId },
+        onTurnDiagnostic: this.options.onVoiceTurnDiagnostic,
       });
     }
   }

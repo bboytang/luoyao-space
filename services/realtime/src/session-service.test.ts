@@ -11,6 +11,7 @@ import {
   type RealtimeSessionConnection,
 } from "./session-service";
 import { createDemoRealtimePipeline } from "./demo-pipeline";
+import type { VoiceTurnDiagnostic } from "./voice-turn-diagnostic";
 
 const wireFixture = JSON.parse(readFileSync(new URL("../../../packages/protocol/src/m2-wire-fixtures.json", import.meta.url), "utf8"));
 
@@ -103,6 +104,131 @@ const pipeline: AudioPipeline = {
 };
 
 describe("RealtimeSessionService", () => {
+  it("reports sanitized stage facts for a completed voice turn", async () => {
+    const connection = new FakeConnection();
+    const diagnostics: VoiceTurnDiagnostic[] = [];
+    new RealtimeSessionService(connection, pipeline, {
+      admittedSessionId: "PRIVATE_SESSION",
+      trustedIdentity: { userId: "PRIVATE_USER", authorizedDeviceId: "PRIVATE_DEVICE" },
+      onTurnDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
+
+    await connection.control({ type: "listen", mode: "start" });
+    await connection.pushAudio(frame);
+    await connection.control({ type: "listen", mode: "stop" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(diagnostics.at(-1)).toMatchObject({
+      stage: "terminal", inputFrames: 1, inputBytes: 4, listenStopReceived: true,
+      asrPartialEvents: 1, asrFinalEvents: 1, nonEmptyAsrFinal: true,
+      asrProviderCompleted: true, brainStarted: true, brainCompleted: true,
+      ttsStarted: true, firstTtsAudioProduced: true, firstTtsAudioSent: true,
+      outputFrames: 1, outputBytes: 4, ttsCompleted: true, outcome: "completed",
+    });
+    expect(diagnostics.map((diagnostic) => diagnostic.stage)).toEqual(expect.arrayContaining([
+      "listen_start", "input_received", "listen_stop", "asr_partial", "asr_final",
+      "asr_completed", "brain_started", "brain_completed", "tts_started",
+      "tts_first_audio_produced", "tts_first_audio_sent", "tts_completed", "terminal",
+    ]));
+    expect(JSON.stringify(diagnostics)).not.toMatch(/PRIVATE_USER|PRIVATE_DEVICE|PRIVATE_SESSION|"text"|"payload"|"sessionId"|"deviceId"/);
+  });
+
+  it("distinguishes partial-only ASR completion from a final that starts Brain", async () => {
+    const connection = new FakeConnection();
+    const diagnostics: VoiceTurnDiagnostic[] = [];
+    const partialOnly: AudioPipeline = {
+      ...pipeline,
+      asr: { async *transcribe(frames) {
+        for await (const _frame of frames) { yield { type: "partial", text: "PRIVATE_TRANSCRIPT" }; }
+      } },
+      llm: { async *stream() { throw new Error("Brain must not run"); } },
+      tts: { async *synthesize() { throw new Error("TTS must not run"); } },
+    };
+    new RealtimeSessionService(connection, partialOnly, {
+      admittedSessionId: "PRIVATE_SESSION",
+      onTurnDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
+    await connection.control({ type: "listen", mode: "start" });
+    await connection.pushAudio(frame);
+    await connection.control({ type: "listen", mode: "stop" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(diagnostics.at(-1)).toMatchObject({
+      stage: "terminal", asrPartialEvents: 1, asrFinalEvents: 0,
+      nonEmptyAsrFinal: false, asrProviderCompleted: true,
+      brainStarted: false, brainCompleted: false, ttsStarted: false,
+      firstTtsAudioSent: false, outcome: "completed",
+    });
+    expect(connection.audio).toHaveLength(0);
+    expect(JSON.stringify(diagnostics)).not.toContain("PRIVATE_TRANSCRIPT");
+  });
+
+  it("reports pipeline failure by sanitized stage without provider or identity data", async () => {
+    const connection = new FakeConnection();
+    const diagnostics: VoiceTurnDiagnostic[] = [];
+    const failed: AudioPipeline = {
+      ...pipeline,
+      asr: { async *transcribe(frames) {
+        for await (const _frame of frames) throw new Error("PRIVATE_PROVIDER_ERROR token=PRIVATE_TOKEN");
+      } },
+    };
+    new RealtimeSessionService(connection, failed, {
+      admittedSessionId: "PRIVATE_SESSION",
+      trustedIdentity: { userId: "PRIVATE_USER", authorizedDeviceId: "PRIVATE_DEVICE" },
+      onTurnDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
+    await connection.control({ type: "listen", mode: "start" });
+    await connection.pushAudio(frame);
+    await connection.control({ type: "listen", mode: "stop" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(diagnostics.at(-1)).toMatchObject({ stage: "terminal", outcome: "failed", failureStage: "asr" });
+    expect(JSON.stringify(diagnostics)).not.toMatch(/PRIVATE_PROVIDER_ERROR|PRIVATE_TOKEN|PRIVATE_USER|PRIVATE_DEVICE|PRIVATE_SESSION/);
+  });
+
+  it("distinguishes produced TTS audio from a failed outbound send", async () => {
+    class FailingAudioConnection extends FakeConnection {
+      override async sendAudio(): Promise<void> {
+        throw new Error("PRIVATE_OUTPUT_ERROR token=PRIVATE_TOKEN");
+      }
+    }
+    const connection = new FailingAudioConnection();
+    const diagnostics: VoiceTurnDiagnostic[] = [];
+    new RealtimeSessionService(connection, pipeline, {
+      admittedSessionId: "PRIVATE_SESSION",
+      onTurnDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
+    await connection.control({ type: "listen", mode: "start" });
+    await connection.pushAudio(frame);
+    await connection.control({ type: "listen", mode: "stop" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(diagnostics.at(-1)).toMatchObject({
+      stage: "terminal", outcome: "failed", failureStage: "output",
+      firstTtsAudioProduced: true, firstTtsAudioSent: false,
+      outputFrames: 0, outputBytes: 0,
+    });
+    expect(JSON.stringify(diagnostics)).not.toMatch(/PRIVATE_OUTPUT_ERROR|PRIVATE_TOKEN|PRIVATE_SESSION/);
+  });
+
+  it("keeps voice output working when the diagnostic logger throws", async () => {
+    const connection = new FakeConnection();
+    let diagnosticCalls = 0;
+    new RealtimeSessionService(connection, pipeline, {
+      admittedSessionId: "PRIVATE_SESSION",
+      onTurnDiagnostic: () => { diagnosticCalls += 1; throw new Error("diagnostic logger unavailable"); },
+    });
+    await connection.control({ type: "listen", mode: "start" });
+    await connection.pushAudio(frame);
+    await connection.control({ type: "listen", mode: "stop" });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(connection.audio).toEqual([frame]);
+    expect(connection.messages).toContainEqual({ type: "stt", text: "hello", final: true });
+    expect(connection.messages).not.toContainEqual(expect.objectContaining({ type: "error" }));
+    expect(diagnosticCalls).toBeGreaterThan(0);
+  });
+
   it("sends a deterministic error when a provider fails during an admitted turn", async () => {
     const connection = new FakeConnection();
     const failed: AudioPipeline = {
@@ -178,6 +304,7 @@ describe("RealtimeSessionService", () => {
 
   it("aborts an active pipeline without leaving the input queue open", async () => {
     let stopped = false;
+    const diagnostics: VoiceTurnDiagnostic[] = [];
     const blockingPipeline: AudioPipeline = {
       ...pipeline,
       asr: {
@@ -194,7 +321,9 @@ describe("RealtimeSessionService", () => {
     };
 
     const connection = new FakeConnection();
-    new RealtimeSessionService(connection, blockingPipeline);
+    new RealtimeSessionService(connection, blockingPipeline, {
+      onTurnDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
 
     await connection.control({
       type: "hello",
@@ -207,6 +336,9 @@ describe("RealtimeSessionService", () => {
 
     await new Promise<void>((resolve) => setTimeout(resolve, 5));
     expect(stopped).toBe(true);
+    expect(diagnostics.at(-1)).toMatchObject({
+      stage: "terminal", outcome: "cancelled", listenStopReceived: false,
+    });
   });
 
   it("keeps the input queue alive and restarts the pipeline for barge-in", async () => {
